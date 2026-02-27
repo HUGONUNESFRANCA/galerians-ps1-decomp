@@ -1,0 +1,21 @@
+# 1. ROMs e Imagens de Disco (EVITAR PROBLEMAS DE COPYRIGHT)
+*.bin
+*.cue
+*.iso
+*.img
+*.mdf
+*.mds
+
+# 2. Arquivos de Projeto do Ghidra (MUITO PESADOS E DESNECESSÁRIOS NO GITHUB)
+*.gpr
+*.rep/
+
+# 3. Arquivos compilados de C/C++ (Queremos apenas o código fonte puro)
+*.o
+*.obj
+*.out
+*.exe
+
+# 4. Lixo de Sistema Operacional
+.DS_Store
+Thumbs.db
