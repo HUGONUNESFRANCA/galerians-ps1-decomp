@@ -11,5 +11,7 @@ typedef unsigned int   undefined4; // 4 bytes (como um int ou ponteiro)
 typedef unsigned short undefined2; // 2 bytes (como um short)
 typedef unsigned char  undefined1; // 1 byte  (como um char ou booleano)
 typedef unsigned char  undefined;
+typedef unsigned long long undefined6; // Forca o C a usar 8 bytes para cobrir os 6 do Ghidra
+typedef unsigned long long uint6;
 
 #endif // GHIDRA_TYPES_H
