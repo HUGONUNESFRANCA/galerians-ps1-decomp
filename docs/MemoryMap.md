@@ -1,29 +1,94 @@
-1. Arquitetura Geral do Jogo
+# Galerians PS1 — Memory Map
 
-Sistema de Entidades: O jogo gerencia até 24 entidades simultâneas (Rion, inimigos, NPCs) na memória.
+> Última atualização: sessão de reverse engineering — game loop encontrado
 
-Tamanho do Objeto: Cada entidade ocupa exatos 56 bytes (0x38) na memória RAM.
+## Structs Mapeadas
 
-Endereço Base Principal: O array de entidades (onde o Rion costuma ficar no índice 0) começa no endereço 0x801cd4a8.
+| Endereço Base | Struct | Status |
+|---|---|---|
+| `0x801AC900` | `EngineState` (g_EngineBase) | Parcial |
+| `0x801C2F9C` | `GlobalCombatState` (Rion) | Confirmado |
 
-Overlays (Código Dinâmico): A lógica de combate e os textos do jogo não ficam no executável principal (SLUS). O jogo usa "Portais" (Thunk Functions) para carregar arquivos extras (como .BIN ou .CDB) do CD direto para a RAM em momentos de transição ou combate.
+## Variáveis Globais
 
-2. Variáveis Globais Descobertas
+| Endereço | Nome | Tipo | Status |
+|---|---|---|---|
+| `0x801AC900` | `g_EngineBase` | `EngineState*` | ✅ |
+| `0x801ACB5E` | `g_ActiveStateIndex` | `uint16_t` | ✅ |
+| `0x801ACB5C` | `g_StateSlotsActive` | `uint16_t` | ✅ |
+| `0x801ACB64` | `g_StateSlotMask` | `uint16_t` | ✅ |
+| `0x801E2218` | `g_StateTable_EntryPtrs` | `void*[16]` | ✅ |
+| `0x801E21D8` | `g_StateTable_RetAddrs` | `void*[16]` | ✅ |
+| `0x801CB3C0` | `g_DeathCount` | `uint32_t` | ✅ |
+| `0x801CB3C4` | `g_ContinuesLeft` | `uint16_t` | ✅ |
+| `0x80193250` | `g_ContinuesCount` | `int32_t` | ✅ |
+| `0x801C2F9C` | `g_RionStats` | `GlobalCombatState` | ✅ |
+| `0x801E2198` | `g_StateTable_VsyncData` | `uint32_t[16]` | ✅ Novo |
+| `0x80185510` | `FrameCycle_Orchestrator` | — | 🔴 Analisar |
 
-0x801cdce0 -> Global_Active_Entity_ID: Armazena o ID (0, 1, 2...) da entidade que está sendo processada no momento.
 
-0x801eb6c8 -> Global_Game_State: Controla o estado da engine (0 = Init, 1 = Normal, 2 = Início de Transição, 3 = Fim de Transição).
+## Funções Mapeadas
 
-3. Funções do Executável (SLUS) Mapeadas
+| Endereço | Nome | Status |
+|---|---|---|
+| `0x80185170` | `GameLoop_Main` | ✅ Confirmado |
+| `0x8017e0fc` | `VSync_WaitFrameSync` | ✅ Confirmado |
+| `0x80172bec` | `StateMachine_Dispatch` | ✅ Confirmado |
+| `0x801854d4` | `StateSlot_Execute` | ✅ Confirmado |
+| `0x8016019c` | `StateSlot_Allocate` | ✅ Confirmado |
+| `0x8018539c` | `Trigger_GameOver` | ✅ Confirmado |
+| `0x8013a704` | `Death_IncrementAndTrigger` | ✅ Confirmado |
+| `0x80128df8` | `Engine_ResetDeathState` | 🟡 Alta |
+| `0x8017d610` | `AP_CriticalEffect` | 🟡 Alta |
+| `0x80177f90` | `Check_BattleEvent` | 🟡 Alta |
+| `0x8017d2e0` | `Toggle_EntityState` | 🟡 Alta |
+| `0x80165f0c` | `Calc_TileIndex` | 🟠 Média |
+| `0x80178d1c` | `Renderer_Flush` | 🟠 Média |
+| `0x8017e040` | `Video_SetMode` | 🟠 Média |
+| `0x8017e050` | `Audio_SetChannel` | 🟡 Alta |
+| `0x8016cbe0` | `Engine_FrameCleanup_A` | 🟠 Média |
+| `0x8016d4d0` | `Engine_FrameCleanup_B` | 🟠 Média |
+| `0x8014ced4` | `GameOver_Screen` | 🟡 Alta |
+| `0x80185510` | `Context_Save` | Coroutine context switcher — scheduler cooperativo |
+| `0x80184f24` | `FUN_80184f24` | 🔴 Analisar — chama Context_Save |
+| `0x801850c4` | `FUN_801850c4` | 🔴 Analisar — chama Context_Save |
 
-FUN_8015c230 -> Init_Entities: Chamada ao carregar uma sala. Zera os dados e o HP de até 24 slots de memória para evitar lixo da sala anterior.
 
-FUN_8015e200 -> Update_Audio_Volumes (ou Play_Spatial_Sound): Lê as coordenadas X, Y e Z das entidades para calcular o volume posicional/3D e o pan (L/R) do áudio (limitado a 127/0x7F).
+## State Machine — Slots Conhecidos
 
-FUN_8017c6d4 -> Update_Game_State (ou Main_Engine_Loop): O "coração" do motor. Controla o relógio de 30 FPS, efeitos de Fade In/Out da tela e aciona os arquivos dinâmicos (Overlays).
+| Slot | Sistema | Função Init |
+|---|---|---|
+| 0 | Vídeo / FMV | `Video_SetMode` + `Audio_SetChannel(3,1)` |
+| 4 | Música BGM | `Audio_SetChannel(0,1)` |
+| 5 | SFX | `Audio_SetChannel(1,1)` |
+| 6 | Voz / Diálogo | `Audio_SetChannel(2,1)` |
+| ? | Gameplay | Contém `Handle_Combat_State` |
 
-Funções Thunk (Portais para os Overlays):
+## Tabelas da State Machine (4 confirmadas)
 
-8ffc0014 -> Call_Overlay_Render: Portal geralmente focado na atualização gráfica contínua.
+| Endereço    | Nome                    | Tipo          | Status      |
+|-------------|-------------------------|---------------|-------------|
+| 0x801E2198  | g_StateTable_VsyncData  | uint32_t[16]  | ✅ Confirmado|
+| 0x801E21D8  | g_StateTable_FuncPtrs   | void*[16]     | ✅ Confirmado|
+| 0x801E2218  | g_StateTable_EntryPtrs  | void*[16]     | ✅ Confirmado|
+| 0x801E2258  | g_LastSlot_A0           | uint32_t      | ✅ Confirmado|
+| 0x801E225C  | g_LastSlot_A1           | uint32_t      | ✅ Confirmado|
 
-8ffc0034 -> Call_Overlay_Logic: Portal engatilhado para eventos dinâmicos ou checagem de controle.
+
+## Questões Abertas
+
+- [ ] Relação entre `EngineState+0x1858` e `GlobalCombatState->hp`
+- [ ] Completar disassembly de `GameLoop_Main` via dump de RAM
+- [ ] Identificar slot de gameplay na state table
+- [ ] Mapear campos desconhecidos de `EngineState`
+
+## Funções do Scheduler
+
+| Endereço    | Nome                    | Status        |
+|-------------|-------------------------|---------------|
+| 0x80185170  | StateSlot_Scheduler     | ✅ Confirmado  |
+| 0x8017e0fc  | VSync_WaitFrameSync     | ✅ Confirmado  |
+| 0x80185510  | Context_Restore         | ✅ Confirmado  |
+| 0x80185548  | Context_SaveReturnParams| 🟡 Analisar   |
+| 0x80184f24  | FUN_80184f24            | 🔴 Analisar   |
+| 0x801850c4  | FUN_801850c4            | 🔴 Analisar   |
