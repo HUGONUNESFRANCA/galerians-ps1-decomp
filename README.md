@@ -1,59 +1,73 @@
-<div align="center">
-  <h1> Galerians (PS1) - Reverse Engineering & Decompilation</h1>
-  
-  <p>
-    <b>Um projeto educacional focado em entender a arquitetura do PlayStation 1 e a lógica por trás do clássico de 1999.</b>
-  </p>
+# Galerians (PS1) - Reverse Engineering & Decompilation
 
-  <img src="https://img.shields.io/badge/Platform-PlayStation%201-lightgrey?style=for-the-badge&logo=playstation" alt="PS1">
-  <img src="https://img.shields.io/badge/Language-C%20%2F%20C%2B%2B-blue?style=for-the-badge&logo=c%2B%2B" alt="C/C++">
-  <img src="https://img.shields.io/badge/Status-Work%20in%20Progress-orange?style=for-the-badge" alt="WIP">
-</div>
-
----
+Um projeto educacional de engenharia reversa focado em entender a arquitetura do PlayStation 1 e a lógica de programação por trás do clássico *Galerians* de 1999.
 
 ## 🎯 Sobre o Projeto
 
-Este repositório documenta a minha jornada pessoal desconstruindo o jogo **Galerians (PS1)**. 
+Este repositório documenta a desconstrução do jogo *Galerians* (PS1). O objetivo principal não é criar um "port" jogável imediato, mas utilizar este desafio como um laboratório prático e aprofundado para consolidar conceitos de:
 
-O objetivo principal aqui **não é** criar um "port" jogável imediato, mas sim utilizar este desafio como um laboratório prático para consolidar conceitos de:
-- Arquitetura de Computadores (MIPS, CPU do PS1).
-- Engenharia Reversa de binários compilados.
-- Análise de memória e manipulação de hexadecimais.
-- Estruturas de dados de jogos clássicos.
+* Arquitetura de Computadores (MIPS R3000A, CPU do PS1).
+* Engenharia Reversa de binários em C e uso de SDKs de época (PsyQ v1.140).
+* Análise de memória, manipulação de ponteiros e arquitetura de *Game Loops* clássicos.
+* Máquinas de estado (*State Machines*) e agendadores de corrotinas (*Coroutines*).
 
-> **⚠️ Aviso Legal (Disclaimer):** Este projeto tem fins estritamente educacionais e de pesquisa. **Nenhum arquivo original do jogo (ROM, BIN, CUE, ISO), código proprietário vazado ou asset protegido por direitos autorais (áudio, texturas, modelos 3D) é fornecido neste repositório.** Para utilizar as ferramentas ou testar o código aqui presente, é necessário possuir uma cópia legal e original do jogo.
+> **⚠️ Aviso Legal (Disclaimer):** Este projeto tem fins estritamente educacionais e de pesquisa. Nenhum arquivo original do jogo (ROM, BIN, CUE, ISO), código proprietário vazado ou asset protegido por direitos autorais (áudio, texturas, modelos 3D) é fornecido neste repositório. Para utilizar as ferramentas ou testar o código aqui presente, é necessário possuir uma cópia legal e original do jogo.
 
----
+## ⚙️ Ficha Técnica do Alvo
+* **Plataforma:** PlayStation 1
+* **SDK Original:** PsyQ v1.140 — Sony SCEE (Compilado em 12/01/1998)
+* **Arquitetura:** MIPS R3000A (Little Endian, 32-bit)
+* **RAM:** 0x80000000 – 0x801FFFFF (2MB)
 
 ## 🛠️ Ferramentas Utilizadas
 
-Meu fluxo de trabalho combina ferramentas de emulação e análise de software:
+O fluxo de trabalho combina análise estática e depuração dinâmica profunda:
+* **Ghidra:** Para a análise estática, mapeamento de ponteiros e descompilação dos executáveis do PS1 gerando código em C.
+* **DuckStation:** Emulador focado em precisão, utilizado com seu *CPU Debugger* interno para *Watchpoints*, *Breakpoints* de execução e *Dumps* de memória RAM.
+* **CDMage:** Para extração e manipulação dos setores dos arquivos de imagem do CD original.
 
-- **[Ghidra](https://ghidra-sre.org/):** Para a análise estática e decompilação dos binários do jogo (arquivos executáveis do PS1).
-- **[DuckStation](https://github.com/stenzek/duckstation):** Emulador focado em precisão, utilizado para testes em tempo real e debug.
-- **[Cheat Engine](https://www.cheatengine.org/):** Acoplado ao emulador para análise dinâmica de memória (mapeamento de variáveis de estado, HP, AP, inventário).
-- **[CDMage](https://www.videohelp.com/software/CDMage):** Para extração e manipulação dos setores dos arquivos de imagem do CD original.
+## 🗺️ Mapeamento de Memória (Destaques)
 
----
+Abaixo estão algumas das principais estruturas já mapeadas na RAM do console. Para o mapeamento completo e offsets detalhados, consulte a documentação em `docs/MemoryMap.md`.
 
-## 🗺️ Mapeamento de Memória (Exemplo Inicial)
-
-*Esta seção será atualizada conforme novas descobertas forem feitas.*
-
-| Endereço RAM | Tamanho | Tipo | Descrição |
+| Endereço (RAM) | Tamanho | Estrutura | Descrição |
 | :--- | :--- | :--- | :--- |
-| `0x800XXXXX` | 2 bytes | `short` | HP atual do Rion. |
-| `0x800XXXXX` | 1 byte | `byte` | AP (Aura Point) gauge. |
-| `0x800XXXXX` | 4 bytes | `int` | Ponteiro para o inventário atual. |
+| `0x801AC8D8` | - | `EngineState` | Struct Mestre da Engine. Gerencia ponteiros globais de estado. |
+| `0x801C2F9C` | 14 bytes | `GlobalCombatState` | Status do Rion. Contém HP (`int16`), AP (`int16`) e nível de *Shorting*. |
+| `0x801AC900` | 16x 0x40 | `ControllerChannel` | Array de portas de controle. Mapeia botões digitais, DualShock e *Rumble*. |
+| `0x801D2198` | 112 slots| `CoroutineContext` | Pool do *Scheduler*. Gerencia o tempo de vida e *Yields* da lógica do jogo. |
+| `0x80193358` | Buffer | `OrderingTable` | Fila de renderização principal (Buffer 0) enviada para a GPU. |
 
----
+## 🗓️ Roadmap do Projeto
+
+### Fase 1 — Mapeamento Estrutural (Em Andamento)
+- [x] Game Loop / Scheduler
+- [x] Sistema de Combate
+- [x] Sistema de Input
+- [x] Sistema de Corrotinas
+- [x] Renderer (parcial)
+- [ ] Sistema de Câmera
+- [ ] Sistema de Áudio
+- [ ] Sistema de FMV/MDEC
+- [ ] Overlays de mapa/área
+
+### Fase 2 — Port Base (C Puro)
+- [ ] Substituir VSync do PS1 por timer nativo de OS (ex: *QueryPerformanceCounter*).
+- [ ] Substituir *DrawOTag* por renderizador moderno (OpenGL/Vulkan).
+- [ ] Substituir *LoadImage* por chamadas de carregamento de texturas (ex: *glTexImage2D*).
+- [ ] Substituir hardware de input do PS1 por bibliotecas modernas.
+
+### Fase 3 — Melhorias Opcionais
+- [ ] FPS desbloqueado (separar update/render com acumulador de tempo).
+- [ ] Resolução aumentada nativamente (framebuffer escalado).
+- [ ] Suporte a Texturas HD.
+- [ ] Ajuste para Widescreen (FOV horizontal expandido).
 
 ## 📁 Estrutura do Repositório
 
 ```text
 galerians-ps1-decomp/
-├── docs/           # Notas de pesquisa, mapas de memória e documentação
-├── src/            # Código C/C++ reconstruído a partir da decompilação
-├── tools/          # Scripts em Python/Batch que criei para ajudar na extração
+├── docs/           # Mapas de memória, tabelas de offsets e documentação da PsyQ
+├── src/            # Código C puro reconstruído a partir da descompilação
+├── tools/          # Scripts criados para extração e automação
 └── README.md       # Este arquivo
