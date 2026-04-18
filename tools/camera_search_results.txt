@@ -1,0 +1,623 @@
+Galerians PS1 — Camera Struct Search Results
+============================================================
+Scan range:   0x80000000 – 0x801FFFFF
+Priority gap: 0x801ACB66 – 0x801AE158 (EngineState unmapped region)
+Total candidates: 57489
+
+────────────────────────────────────────────────────────────
+*** PRIORITY: Inside EngineState gap ***  (173 hits)
+────────────────────────────────────────────────────────────
+
+[  1] 0x801ACC64  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:     49       0       0       0       0       0       0       0       0       0       0       0
+
+[  2] 0x801ACC84  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[  3] 0x801ACCE4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[  4] 0x801ACD64  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[  5] 0x801ACDE4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[  6] 0x801ACE44  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:     49       0       0       0       0       0       0       0       0       0       0       0
+
+[  7] 0x801ACE64  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[  8] 0x801ACEC4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[  9] 0x801ACF24  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 10] 0x801ACF44  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 11] 0x801ACF84  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 12] 0x801AD004  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 13] 0x801AD064  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 14] 0x801AD084  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 15] 0x801AD0E4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 16] 0x801AD164  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 17] 0x801AD1C4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 18] 0x801AD1E4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 19] 0x801AD204  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 20] 0x801AD224  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 21] 0x801AD244  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 22] 0x801AD264  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 23] 0x801AD284  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 24] 0x801AD2A4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 25] 0x801AD2C4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 26] 0x801AD2E4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 27] 0x801AD304  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 28] 0x801AD324  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 29] 0x801AD344  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 30] 0x801AD364  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 31] 0x801AD384  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 32] 0x801AD3A4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 33] 0x801AD3C4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 34] 0x801AD3E4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 35] 0x801AD404  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 36] 0x801AD424  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 37] 0x801AD444  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 38] 0x801AD464  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 39] 0x801AD484  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 40] 0x801AD4A4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 41] 0x801AD4C4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 42] 0x801AD4E4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 43] 0x801AD504  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 44] 0x801AD524  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 45] 0x801AD544  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 46] 0x801AD564  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 47] 0x801AD584  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 48] 0x801AD5A4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 49] 0x801AD5C4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+[ 50] 0x801AD5E4  score=1.000  type=cluster
+      16/16 values in [-4096,4096]
+      int16 values:      0       0       0       0       0       0       0       0       0       0       0       0
+
+────────────────────────────────────────────────────────────
+Other candidates  (57316 hits)
+────────────────────────────────────────────────────────────
+
+[  1] 0x801BFCF8  score=1.000  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4096       0       0       0    4096       0       0       0    4096       0       0       0
+      row 0: [  4096      0      0]  |mag|=4096.0 (ideal=4096)
+      row 1: [     0   4096      0]  |mag|=4096.0 (ideal=4096)
+      row 2: [     0      0   4096]  |mag|=4096.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, 0, 0]
+
+[  2] 0x801BFD38  score=1.000  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4096       0       0       0    4096       0       0       0    4096       0       6       0
+      row 0: [  4096      0      0]  |mag|=4096.0 (ideal=4096)
+      row 1: [     0   4096      0]  |mag|=4096.0 (ideal=4096)
+      row 2: [     0      0   4096]  |mag|=4096.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, 6, 0]
+
+[  3] 0x801BFD58  score=1.000  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4096       0       0       0    4096       0       0       0    4096       0       0       0
+      row 0: [  4096      0      0]  |mag|=4096.0 (ideal=4096)
+      row 1: [     0   4096      0]  |mag|=4096.0 (ideal=4096)
+      row 2: [     0      0   4096]  |mag|=4096.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, 0, 0]
+
+[  4] 0x801BFF48  score=1.000  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4096       0       0       0    4096       0       0       0    4096       0       0       0
+      row 0: [  4096      0      0]  |mag|=4096.0 (ideal=4096)
+      row 1: [     0   4096      0]  |mag|=4096.0 (ideal=4096)
+      row 2: [     0      0   4096]  |mag|=4096.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, 0, 0]
+
+[  5] 0x801BFF88  score=1.000  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4096       0       0       0    4096       0       0       0    4096       0       0       0
+      row 0: [  4096      0      0]  |mag|=4096.0 (ideal=4096)
+      row 1: [     0   4096      0]  |mag|=4096.0 (ideal=4096)
+      row 2: [     0      0   4096]  |mag|=4096.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, 0, 0]
+
+[  6] 0x801C3AD0  score=1.000  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   1229    2820   -2705     -88    2853    2937    3906    -824     914       0   -1023      -1
+      row 0: [  1229   2820  -2705]  |mag|=4096.3 (ideal=4096)
+      row 1: [   -88   2853   2937]  |mag|=4095.5 (ideal=4096)
+      row 2: [  3906   -824    914]  |mag|=4095.3 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1023, -1]
+
+[  7] 0x801C323C  score=1.000  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   1077    -998   -3825       4    3964   -1032    3952     266    1042       0   -1049      -1
+      row 0: [  1077   -998  -3825]  |mag|=4097.1 (ideal=4096)
+      row 1: [     4   3964  -1032]  |mag|=4096.1 (ideal=4096)
+      row 2: [  3952    266   1042]  |mag|=4095.7 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1049, -1]
+
+[  8] 0x801C3BC4  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   1242    -381   -3886     -31    4076    -406    3903     148    1232       0   -1148      -1
+      row 0: [  1242   -381  -3886]  |mag|=4097.4 (ideal=4096)
+      row 1: [   -31   4076   -406]  |mag|=4096.3 (ideal=4096)
+      row 2: [  3903    148   1232]  |mag|=4095.5 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1148, -1]
+
+[  9] 0x8019FC72  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       3       0      12    4095       3       0      12    4095    1021       0      12
+      row 0: [  4095      3      0]  |mag|=4095.0 (ideal=4096)
+      row 1: [    12   4095      3]  |mag|=4095.0 (ideal=4096)
+      row 2: [     0     12   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [1021, 0, 12]
+
+[ 10] 0x8019FCD2  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       2       0      11    4095       2       0      13    4095       2    -512      11
+      row 0: [  4095      2      0]  |mag|=4095.0 (ideal=4096)
+      row 1: [    11   4095      2]  |mag|=4095.0 (ideal=4096)
+      row 2: [     0     13   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [2, -512, 11]
+
+[ 11] 0x801A01B4  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       0      11       2    4095       0      13       2    4095    -512      11       2
+      row 0: [  4095      0     11]  |mag|=4095.0 (ideal=4096)
+      row 1: [     2   4095      0]  |mag|=4095.0 (ideal=4096)
+      row 2: [    13      2   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 11, 2]
+
+[ 12] 0x8019FF32  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       1       1      12    4095       1       1      12    4095       1    1023      12
+      row 0: [  4095      1      1]  |mag|=4095.0 (ideal=4096)
+      row 1: [    12   4095      1]  |mag|=4095.0 (ideal=4096)
+      row 2: [     1     12   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [1, 1023, 12]
+
+[ 13] 0x801A87B4  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       1      12       1    4095       1      12       1    4095    1023      12       1
+      row 0: [  4095      1     12]  |mag|=4095.0 (ideal=4096)
+      row 1: [     1   4095      1]  |mag|=4095.0 (ideal=4096)
+      row 2: [    12      1   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [1023, 12, 1]
+
+[ 14] 0x8019FEF2  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       1       0       9    4095       1       0      13    4095       1    1025      13
+      row 0: [  4095      1      0]  |mag|=4095.0 (ideal=4096)
+      row 1: [     9   4095      1]  |mag|=4095.0 (ideal=4096)
+      row 2: [     0     13   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [1, 1025, 13]
+
+[ 15] 0x801A8774  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       0       9       1    4095       0      13       1    4095    1025      13       1
+      row 0: [  4095      0      9]  |mag|=4095.0 (ideal=4096)
+      row 1: [     1   4095      0]  |mag|=4095.0 (ideal=4096)
+      row 2: [    13      1   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [1025, 13, 1]
+
+[ 16] 0x8019FC02  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       0       0       6    4095       0       0      13    4095    7169       0      13
+      row 0: [  4095      0      0]  |mag|=4095.0 (ideal=4096)
+      row 1: [     6   4095      0]  |mag|=4095.0 (ideal=4096)
+      row 2: [     0     13   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [7169, 0, 13]
+
+[ 17] 0x8019FBD2  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       0       0       6    4095       0       0      12    4095   31775       0      12
+      row 0: [  4095      0      0]  |mag|=4095.0 (ideal=4096)
+      row 1: [     6   4095      0]  |mag|=4095.0 (ideal=4096)
+      row 2: [     0     12   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [31775, 0, 12]
+
+[ 18] 0x8019FED2  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       1       0       9    4095       1       0       9    4095       1       0       9
+      row 0: [  4095      1      0]  |mag|=4095.0 (ideal=4096)
+      row 1: [     9   4095      1]  |mag|=4095.0 (ideal=4096)
+      row 2: [     0      9   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [1, 0, 9]
+
+[ 19] 0x801A8754  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       0       9       1    4095       0       9       1    4095       0       9       1
+      row 0: [  4095      0      9]  |mag|=4095.0 (ideal=4096)
+      row 1: [     1   4095      0]  |mag|=4095.0 (ideal=4096)
+      row 2: [     9      1   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, 9, 1]
+
+[ 20] 0x8019FC52  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4095       0       0       6    4095       0       0       6    4095       0       0       6
+      row 0: [  4095      0      0]  |mag|=4095.0 (ideal=4096)
+      row 1: [     6   4095      0]  |mag|=4095.0 (ideal=4096)
+      row 2: [     0      6   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, 0, 6]
+
+[ 21] 0x801C3DAC  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   2363     249   -3337     931    3872     950    3213   -1309    2175       0   -1006      -1
+      row 0: [  2363    249  -3337]  |mag|=4096.5 (ideal=4096)
+      row 1: [   931   3872    950]  |mag|=4094.1 (ideal=4096)
+      row 2: [  3213  -1309   2175]  |mag|=4094.8 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1006, -1]
+
+[ 22] 0x801C3CB8  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:    618      67   -4050    -150    4092      49    4045     135     617       0   -1124      -1
+      row 0: [   618     67  -4050]  |mag|=4097.4 (ideal=4096)
+      row 1: [  -150   4092     49]  |mag|=4095.0 (ideal=4096)
+      row 2: [  4045    135    617]  |mag|=4094.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1124, -1]
+
+[ 23] 0x801C3330  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   1828   -2497   -2686      33    3010   -2776    3665    1213    1363       0   -1047      -1
+      row 0: [  1828  -2497  -2686]  |mag|=4097.7 (ideal=4096)
+      row 1: [    33   3010  -2776]  |mag|=4094.8 (ideal=4096)
+      row 2: [  3665   1213   1363]  |mag|=4094.1 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1047, -1]
+
+[ 24] 0x8019E4B2  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4094       1       0      12    4094       1       0      12    4094    1023       0      12
+      row 0: [  4094      1      0]  |mag|=4094.0 (ideal=4096)
+      row 1: [    12   4094      1]  |mag|=4094.0 (ideal=4096)
+      row 2: [     0     12   4094]  |mag|=4094.0 (ideal=4096)
+      +0x12 (pos/angles?): [1023, 0, 12]
+
+[ 25] 0x8019E472  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4094       0       0       9    4094       0       0      13    4094    1025       0      13
+      row 0: [  4094      0      0]  |mag|=4094.0 (ideal=4096)
+      row 1: [     9   4094      0]  |mag|=4094.0 (ideal=4096)
+      row 2: [     0     13   4094]  |mag|=4094.0 (ideal=4096)
+      +0x12 (pos/angles?): [1025, 0, 13]
+
+[ 26] 0x8019E452  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   4094       0       0       9    4094       0       0       9    4094       0       0       9
+      row 0: [  4094      0      0]  |mag|=4094.0 (ideal=4096)
+      row 1: [     9   4094      0]  |mag|=4094.0 (ideal=4096)
+      row 2: [     0      9   4094]  |mag|=4094.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, 0, 9]
+
+[ 27] 0x801C3424  score=0.999  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   1125   -1531   -3631    -429    3703   -1694    3914     841     854       0   -1133      -1
+      row 0: [  1125  -1531  -3631]  |mag|=4098.0 (ideal=4096)
+      row 1: [  -429   3703  -1694]  |mag|=4094.6 (ideal=4096)
+      row 2: [  3914    841    854]  |mag|=4093.4 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1133, -1]
+
+[ 28] 0x801C3EA0  score=0.998  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   2385   -2365   -2347     884    3230   -2354    3209     861    2391       0   -1032      -1
+      row 0: [  2385  -2365  -2347]  |mag|=4097.5 (ideal=4096)
+      row 1: [   884   3230  -2354]  |mag|=4093.4 (ideal=4096)
+      row 2: [  3209    861   2391]  |mag|=4093.4 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1032, -1]
+
+[ 29] 0x801C37F4  score=0.998  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   1647   -3113   -2096     188    2351   -3347    3744    1244    1089       0   -1080      -1
+      row 0: [  1647  -3113  -2096]  |mag|=4098.4 (ideal=4096)
+      row 1: [   188   2351  -3347]  |mag|=4094.5 (ideal=4096)
+      row 2: [  3744   1244   1089]  |mag|=4092.8 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1080, -1]
+
+[ 30] 0x801C3518  score=0.998  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   2078    -350   -3515    -621    3974    -764    3475     916    1958       0   -1146      -1
+      row 0: [  2078   -350  -3515]  |mag|=4098.3 (ideal=4096)
+      row 1: [  -621   3974   -764]  |mag|=4094.1 (ideal=4096)
+      row 2: [  3475    916   1958]  |mag|=4092.5 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1146, -1]
+
+[ 31] 0x801C38E8  score=0.998  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   2209    1788   -2953    1275    2833    2666    3202   -2358     965       0    -996      -1
+      row 0: [  2209   1788  -2953]  |mag|=4098.4 (ideal=4096)
+      row 1: [  1275   2833   2666]  |mag|=4093.8 (ideal=4096)
+      row 2: [  3202  -2358    965]  |mag|=4092.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, -996, -1]
+
+[ 32] 0x801C3F94  score=0.998  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   2243    -397   -3407     788    4016      53    3334    -689    2271       0    -922      -1
+      row 0: [  2243   -397  -3407]  |mag|=4098.3 (ideal=4096)
+      row 1: [   788   4016     53]  |mag|=4092.9 (ideal=4096)
+      row 2: [  3334   -689   2271]  |mag|=4092.4 (ideal=4096)
+      +0x12 (pos/angles?): [0, -922, -1]
+
+[ 33] 0x80100D32  score=0.998  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:      0    4096     273    4096      17       0       0       0    4096   12561    4915   12561
+      row 0: [     0   4096    273]  |mag|=4105.1 (ideal=4096)
+      row 1: [  4096     17      0]  |mag|=4096.0 (ideal=4096)
+      row 2: [     0      0   4096]  |mag|=4096.0 (ideal=4096)
+      +0x12 (pos/angles?): [12561, 4915, 12561]
+
+[ 34] 0x801C39DC  score=0.998  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   2180    2444   -2464    1231    2174    3242    3239   -2466     415       0   -1041      -1
+      row 0: [  2180   2444  -2464]  |mag|=4098.4 (ideal=4096)
+      row 1: [  1231   2174   3242]  |mag|=4092.9 (ideal=4096)
+      row 2: [  3239  -2466    415]  |mag|=4092.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1041, -1]
+
+[ 35] 0x801C360C  score=0.997  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   2403    2629   -2027    -183    2600    3155    3311   -1760    1635       0   -1141      -1
+      row 0: [  2403   2629  -2027]  |mag|=4098.1 (ideal=4096)
+      row 1: [  -183   2600   3155]  |mag|=4092.4 (ideal=4096)
+      row 2: [  3311  -1760   1635]  |mag|=4090.7 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1141, -1]
+
+[ 36] 0x801C3700  score=0.997  type=gte_matrix
+      GTE matrix score=1.00
+      int16 values:   2075    2014   -2905    -415    3476    2117    3505    -783    1957       0   -1209      -1
+      row 0: [  2075   2014  -2905]  |mag|=4098.9 (ideal=4096)
+      row 1: [  -415   3476   2117]  |mag|=4091.0 (ideal=4096)
+      row 2: [  3505   -783   1957]  |mag|=4090.0 (ideal=4096)
+      +0x12 (pos/angles?): [0, -1209, -1]
+
+[ 37] 0x8019645A  score=0.987  type=gte_matrix
+      GTE matrix score=0.99
+      int16 values:   2343    2348    2353    2359    2364    2369    2374    2379    2384    2389    2394    2399
+      row 0: [  2343   2348   2353]  |mag|=4066.9 (ideal=4096)
+      row 1: [  2359   2364   2369]  |mag|=4094.6 (ideal=4096)
+      row 2: [  2374   2379   2384]  |mag|=4120.6 (ideal=4096)
+      +0x12 (pos/angles?): [2389, 2394, 2399]
+
+[ 38] 0x8019E492  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4094    -512       0      11    4094    -512       0      11    4094    -512       0      11
+      row 0: [  4094   -512      0]  |mag|=4125.9 (ideal=4096)
+      row 1: [    11   4094   -512]  |mag|=4125.9 (ideal=4096)
+      row 2: [     0     11   4094]  |mag|=4094.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 0, 11]
+
+[ 39] 0x8019FDD2  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095    -512       0       8    4095    -512       0       8    4095    -512       0       8
+      row 0: [  4095   -512      0]  |mag|=4126.9 (ideal=4096)
+      row 1: [     8   4095   -512]  |mag|=4126.9 (ideal=4096)
+      row 2: [     0      8   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 0, 8]
+
+[ 40] 0x8019FDF2  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095    -512       0       8    4095    -512       0       8    4095    -512       0       8
+      row 0: [  4095   -512      0]  |mag|=4126.9 (ideal=4096)
+      row 1: [     8   4095   -512]  |mag|=4126.9 (ideal=4096)
+      row 2: [     0      8   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 0, 8]
+
+[ 41] 0x8019FE12  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095    -512       0       8    4095    -512       0       8    4095    -512       0       8
+      row 0: [  4095   -512      0]  |mag|=4126.9 (ideal=4096)
+      row 1: [     8   4095   -512]  |mag|=4126.9 (ideal=4096)
+      row 2: [     0      8   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 0, 8]
+
+[ 42] 0x8019FE32  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095    -512       0       8    4095    -512       0       8    4095    -512       0       8
+      row 0: [  4095   -512      0]  |mag|=4126.9 (ideal=4096)
+      row 1: [     8   4095   -512]  |mag|=4126.9 (ideal=4096)
+      row 2: [     0      8   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 0, 8]
+
+[ 43] 0x8019FE52  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095    -512       0       8    4095    -512       0       8    4095    -512       0       8
+      row 0: [  4095   -512      0]  |mag|=4126.9 (ideal=4096)
+      row 1: [     8   4095   -512]  |mag|=4126.9 (ideal=4096)
+      row 2: [     0      8   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 0, 8]
+
+[ 44] 0x8019FE72  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095    -512       0       8    4095    -512       0       8    4095    -512       0       8
+      row 0: [  4095   -512      0]  |mag|=4126.9 (ideal=4096)
+      row 1: [     8   4095   -512]  |mag|=4126.9 (ideal=4096)
+      row 2: [     0      8   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 0, 8]
+
+[ 45] 0x8019FE92  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095    -512       0       8    4095    -512       0       8    4095    -512       0       8
+      row 0: [  4095   -512      0]  |mag|=4126.9 (ideal=4096)
+      row 1: [     8   4095   -512]  |mag|=4126.9 (ideal=4096)
+      row 2: [     0      8   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 0, 8]
+
+[ 46] 0x8019FEB2  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095    -512       0       8    4095    -512       0       8    4095    -512       0       8
+      row 0: [  4095   -512      0]  |mag|=4126.9 (ideal=4096)
+      row 1: [     8   4095   -512]  |mag|=4126.9 (ideal=4096)
+      row 2: [     0      8   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 0, 8]
+
+[ 47] 0x8019FF12  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095       1    -512      11    4095       1    -512      11    4095       1    -512      11
+      row 0: [  4095      1   -512]  |mag|=4126.9 (ideal=4096)
+      row 1: [    11   4095      1]  |mag|=4095.0 (ideal=4096)
+      row 2: [  -512     11   4095]  |mag|=4126.9 (ideal=4096)
+      +0x12 (pos/angles?): [1, -512, 11]
+
+[ 48] 0x801A8794  score=0.985  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   4095    -512      11       1    4095    -512      11       1    4095    -512      11       1
+      row 0: [  4095   -512     11]  |mag|=4126.9 (ideal=4096)
+      row 1: [     1   4095   -512]  |mag|=4126.9 (ideal=4096)
+      row 2: [    11      1   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [-512, 11, 1]
+
+[ 49] 0x80196BDC  score=0.984  type=gte_matrix
+      GTE matrix score=0.98
+      int16 values:   2389    2383    2377    2371    2364    2358    2352    2346    2340    2334    2328    2322
+      row 0: [  2389   2383   2377]  |mag|=4127.5 (ideal=4096)
+      row 1: [  2371   2364   2358]  |mag|=4095.2 (ideal=4096)
+      row 2: [  2352   2346   2340]  |mag|=4063.4 (ideal=4096)
+      +0x12 (pos/angles?): [2334, 2328, 2322]
+
+[ 50] 0x8019FCF2  score=0.939  type=gte_matrix
+      GTE matrix score=0.94
+      int16 values:   4095    1022       0      11    4095    1022       0      13    4095    1022    -512      11
+      row 0: [  4095   1022      0]  |mag|=4220.6 (ideal=4096)
+      row 1: [    11   4095   1022]  |mag|=4220.6 (ideal=4096)
+      row 2: [     0     13   4095]  |mag|=4095.0 (ideal=4096)
+      +0x12 (pos/angles?): [1022, -512, 11]
+
+
+============================================================
+Next steps:
+  1. Open top hits in DuckStation Memory viewer
+  2. Set Write watchpoints on the 3 most promising addresses
+  3. Move camera in-game — watchpoint should fire
+  4. Check XREFs to the writing function in Ghidra
+  5. Confirm struct layout using 'gte_matrix' hits first
+     (GTE matrix entries change continuously during 3D movement)
