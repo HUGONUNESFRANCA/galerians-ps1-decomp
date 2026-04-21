@@ -1,85 +1,120 @@
 #include "include/camera.h"
 #include "include/ghidra_types.h"
 
-/*
- * Camera_LoadToGTE — 0x80187338  ✅ Confirmado
- *
- * Carrega a GTEMatrix da câmera nos registradores COP2 (GTE):
- *   R11-R33  ← cam->gte.m[3][3]   (matriz de rotação)
- *   TRX/Y/Z  ← cam->gte.t[3]      (vetor de translação)
- *
- * Após esta chamada, instruções GTE como RTPS/RTPT transformam
- * vértices do espaço mundo para o espaço câmera.
- *
- * Equivalente PsyQ:
- *   SetRotMatrix((MATRIX *)&cam->gte);
- *   SetTransMatrix((MATRIX *)&cam->gte);
- *
- * Equivalente PC (Phase 2):
- *   Construir view matrix 4×4 a partir de gte.m + gte.t
- *   e enviar ao shader via glUniformMatrix4fv.
- */
-void Camera_LoadToGTE(const CameraEntry *cam)
-{
-    /*
-     * No PS1 original, esta função escreve diretamente nos
-     * registradores COP2 via instruções MTC2 (Move To Coprocessor 2).
-     *
-     * Reconstrução (pseudocódigo GTE):
-     *
-     *   GTE_R11 = cam->gte.m[0][0];  GTE_R12 = cam->gte.m[0][1];
-     *   GTE_R13 = cam->gte.m[0][2];
-     *   GTE_R21 = cam->gte.m[1][0];  GTE_R22 = cam->gte.m[1][1];
-     *   GTE_R23 = cam->gte.m[1][2];
-     *   GTE_R31 = cam->gte.m[2][0];  GTE_R32 = cam->gte.m[2][1];
-     *   GTE_R33 = cam->gte.m[2][2];
-     *   GTE_TRX = cam->gte.t[0];
-     *   GTE_TRY = cam->gte.t[1];
-     *   GTE_TRZ = cam->gte.t[2];
-     *
-     * Stub — implementação real requer intrínsecos GTE ou inline asm MIPS.
-     */
-    (void)cam;
-}
+#include <stddef.h>
 
 /*
- * Camera_SetActive — endereço a confirmar (🔴 reconstruído)
+ * ──────────────────────────────────────────────────────────────
+ * Galerians PS1 — Sistema de Câmera
+ * ──────────────────────────────────────────────────────────────
  *
- * Copia a entrada 'index' da g_CameraTable para g_ActiveCamera
- * e carrega nos registradores GTE.
+ * Este arquivo reconstrói as funções de câmera identificadas no
+ * dump de RAM (DuckStation → Ghidra). Todos os endereços absolutos
+ * referenciam o espaço de RAM PS1 (0x80000000 – 0x801FFFFF) e a
+ * scratchpad COP2 em 0x1F800168.
  *
- * Hipótese baseada no padrão comum de câmeras fixas PS1:
- *   1. Cada sala define um ou mais ângulos de câmera na tabela.
- *   2. Ao entrar num trigger de câmera, o jogo chama esta função.
- *   3. Camera_LoadToGTE é chamada a cada frame para manter GTE atualizado.
+ *   0x80187320  Camera_LoadToGTE  ✅
+ *   0x8013b584  Camera_Manager    ✅
+ *   0x80187350  Camera_Select     🟠 (stub — 20 XREFs, a confirmar)
+ *
+ * Port Notes (Fase 2 — Windows/OpenGL) estão no final de cada função.
+ * ──────────────────────────────────────────────────────────────
  */
-void Camera_SetActive(int index)
+
+
+/* ────────────────────────────────────────────────────────────────
+ * Camera_LoadToGTE — 0x80187320  ✅ Confirmado
+ *
+ * Copia 32 bytes (8 × uint32) do buffer global g_CameraBuffer
+ * (0x801eb560) para a scratchpad GTE (param_1, tipicamente
+ * 0x1F800168). Esse bloco alimenta os registradores COP2
+ * (R11..R33 + TRX/TRY/TRZ) no próximo ciclo de transformação.
+ *
+ * Pseudocódigo do dump:
+ *     for (i = 0; i < 8; i++)
+ *         dst[i] = g_CameraBuffer[i];
+ *
+ * PORT NOTE (PC):
+ *     A scratchpad COP2 não existe fora do PS1. Em OpenGL/Vulkan,
+ *     a matriz de visão equivalente deve ser enviada ao shader
+ *     como uniform:
+ *         glUniformMatrix4fv(u_view, 1, GL_FALSE, view_matrix);
+ *     Em Vulkan, via UBO / Push Constant.
+ * ─────────────────────────────────────────────────────────────── */
+void Camera_LoadToGTE(uint32_t *dst)
 {
-    *g_ActiveCamera = g_CameraTable[index];
-    Camera_LoadToGTE(g_ActiveCamera);
+    uint32_t *src = g_CameraBuffer;   /* 0x801eb560 */
+    int i;
+
+    /* Loop fiel ao dump: 8 iterações copiando uint32 por vez. */
+    for (i = 0; i < 8; i++) {
+        dst[i] = src[i];
+    }
 }
 
-/*
- * Camera_BuildMatrix — endereço a confirmar (🔴 reconstruído)
+
+/* ────────────────────────────────────────────────────────────────
+ * Camera_Manager — 0x8013b584  ✅ Confirmado
  *
- * Reconstrói cam->gte.m[][] a partir dos ângulos Euler rot_x/y/z.
+ * Reseta o estado dos 4 slots de câmera residentes em
+ * g_CameraSlots (0x801C1778) e zera o ponteiro de função global
+ * armazenado em PTR_FUN_801c1768.
  *
- * PS1 usa ângulos em [0, 4095] onde 4096 == 360° (= 2π rad).
- * A GTE opera com senos/cossenos pré-calculados via tabela (rcos/rsin)
- * ou usando a instrução GTE ROTY/ROTZ/ROTX.
+ * Para cada slot (stride 0xC60):
+ *   slot->active_flag   = 0      (campo +0xC3E)
+ *   slot->func_ptr      = NULL   (campo +0x00)
  *
- * Nota: câmeras fixas pré-calculam a matriz offline (no editor de nível)
- * e a armazenam na ROM — esta função pode nunca ser chamada em runtime.
- * Manter como referência de como a matriz seria gerada.
+ * Pseudocódigo do dump:
+ *     for (i = 0; i < 4; i++) {
+ *         CameraSlot *s = &g_CameraSlots[i];
+ *         s->active_flag = 0;
+ *         s->func_ptr    = NULL;
+ *     }
+ *     *(void **)0x801c1768 = NULL;
  *
- * Equivalência de ângulo:
- *   float rad = (float)rot * (2.0f * M_PI / 4096.0f);
- */
-void Camera_BuildMatrix(CameraEntry *cam)
+ * PORT NOTE (PC):
+ *     Equivalente a resetar o array de câmeras ao carregar uma
+ *     nova cena/sala. Uma implementação PC limpa seria:
+ *         memset(scene->cameras, 0, sizeof(scene->cameras));
+ *         scene->active_camera_cb = NULL;
+ * ─────────────────────────────────────────────────────────────── */
+void Camera_Manager(void)
 {
-    /*
-     * Stub — reconstrução requer tabela de seno/cosseno do PsyQ
-     * (rcos[]/rsin[] em libmath) ou conversão float para PC port.
-     */
-    (void)cam;
+    CameraSlot *slot = g_CameraSlots; /* 0x801C1778 */
+    int i;
+
+    for (i = 0; i < CAMERA_SLOT_COUNT; i++) {
+        slot->func_ptr    = NULL;   /* +0x00    */
+        slot->active_flag = 0;      /* +0xC3E   */
+
+        /* Avança manualmente pelo stride confirmado (0xC60). */
+        slot = (CameraSlot *)((uint8_t *)slot + CAMERA_SLOT_STRIDE);
+    }
+
+    /* Ponteiro global PTR_FUN_801c1768 — função corrente é invalidada. */
+    *(void **)0x801c1768 = NULL;
+}
+
+
+/* ────────────────────────────────────────────────────────────────
+ * Camera_Select — 0x80187350  🟠 Stub (hipótese)
+ *
+ * 20 XREFs apontam para esta função, o que sugere fortemente que
+ * seja o ponto de entrada para troca de câmera (triggers de sala,
+ * cutscenes, transições). Nome e assinatura ainda a confirmar.
+ *
+ * TODO:
+ *   - Decompilar no Ghidra e validar a assinatura.
+ *   - Confirmar se copia g_CameraTable[index] → g_ActiveCameraMatrix.
+ *   - Verificar se aciona Camera_LoadToGTE após a cópia.
+ *   - Mapear callers para identificar convenções de índice.
+ *
+ * PORT NOTE (PC):
+ *     Quando confirmado, deve traduzir-se em selecionar um preset
+ *     de câmera e recomputar a view matrix da cena.
+ * ─────────────────────────────────────────────────────────────── */
+void Camera_Select(int index)
+{
+    /* TODO: reconstrução pendente. */
+    (void)index;
 }

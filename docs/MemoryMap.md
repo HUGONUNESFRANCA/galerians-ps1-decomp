@@ -3,7 +3,7 @@
 > **SDK:** PsyQ v1.140 — Sony SCEE, compilado em 12 Janeiro 1998  
 > **CPU:** MIPS R3000A (Little Endian, 32-bit)  
 > **RAM PS1:** 0x80000000 – 0x801FFFFF (2MB)  
-> **Última atualização:** Sessão de mapeamento do Renderer
+> **Última atualização:** Sessão de mapeamento do Sistema de Câmera
 
 ---
 
@@ -50,6 +50,13 @@ MAPA DE MEMÓRIA GLOBAL
 0x801eb574  g_EngineStatePtr
 0x8019b4c8  g_RendererVtable
 0x8019b4d2  g_RendererDebugLevel
+0x801BFD10  g_ActiveCameraMatrix (matriz viva, muda no movimento)
+0x801C1768  PTR_FUN_801c1768     (ponteiro de função global de câmera)
+0x801C1778  g_CameraSlots        (4 × stride 0xC60)
+0x801C2FF4  g_CameraFuncPtr      (callback da câmera ativa)
+0x801C3200  g_CameraTable        (tabela pré-definida por sala)
+0x801eb560  g_CameraBuffer       (uint32[8] — fonte do upload GTE)
+0x1F800168  GTE scratchpad       (destino de Camera_LoadToGTE)
 ──────────────────────────────────────────────────────────────
 ```
 
@@ -211,6 +218,44 @@ typedef struct {
 
 ---
 
+### `CameraEntry` — Entrada de Câmera (tabela + ativa)
+**Ativa:** `0x801BFD10` (`g_ActiveCameraMatrix`)  
+**Tabela:** `0x801C3200` (`g_CameraTable`)
+
+```c
+typedef struct {
+    int16_t  rot_matrix[9];  // +0x00 matriz 3×3 (int16, 4096=1.0)
+    int16_t  _pad;           // +0x12 alinhamento PsyQ MATRIX
+    int32_t  pos_x;          // +0x14 translação X
+    int32_t  pos_y;          // +0x18 translação Y
+    int32_t  pos_z;          // +0x1C translação Z
+    int16_t  active_flag;    // +0x20 -1 = válido / 0 = inativo
+} CameraEntry;
+```
+
+---
+
+### `CameraSlot` — Slot Residente de Câmera
+**Base:** `0x801C1778` (`g_CameraSlots`)  
+**Stride:** `0xC60` bytes por slot (4 slots)
+
+```c
+// Layout confirmado (apenas dois campos):
+//   +0x000  void *func_ptr      — callback/handler do slot
+//   +0xC3E  int16_t active_flag — 0 = inativo (resetado por Camera_Manager)
+//
+// Restante do slot (0x004 – 0xC3D, 0xC40 – 0xC5F) ainda não mapeado.
+```
+
+**Constantes:**
+```c
+#define CAMERA_SLOT_COUNT    4
+#define CAMERA_SLOT_STRIDE   0xC60
+#define GTE_SCRATCHPAD_ADDR  0x1F800168
+```
+
+---
+
 ## ⚙️ Funções Mapeadas
 
 ### Sistema de Game Loop / Scheduler
@@ -280,6 +325,14 @@ typedef struct {
 | `0x8016019c` | `StateSlot_Allocate` | ✅ | Aloca slot — revela canais de áudio/vídeo |
 | `0x80172bec` | `StateMachine_Dispatch` | ✅ | Dispatcher com DAT_801acb5e como índice |
 
+### Sistema de Câmera
+
+| Endereço | Nome | Confiança | Descrição |
+|---|---|---|---|
+| `0x80187320` | `Camera_LoadToGTE` | ✅ | Copia 8 × uint32 de `g_CameraBuffer` para scratchpad GTE (`0x1F800168`) |
+| `0x8013b584` | `Camera_Manager` | ✅ | Reseta 4 slots (stride `0xC60`) — zera `+0xC3E` e `func_ptr` |
+| `0x80187350` | `Camera_Select` | 🟠 | 20 XREFs — hipótese: seleção de câmera. Prioridade ALTA |
+
 ---
 
 ## 📊 Variáveis Globais Confirmadas
@@ -309,6 +362,11 @@ typedef struct {
 | `0x8019b4d2` | `g_RendererDebugLevel` | `uint16_t` | ✅ |
 | `0x80193358` | `g_OrderingTable[0]` | `uint32_t[]` | ✅ |
 | `0x80193888` | `g_OrderingTable[1]` | `uint32_t[]` | ✅ |
+| `0x801BFD10` | `g_ActiveCameraMatrix` | `CameraEntry*` | ✅ |
+| `0x801C1778` | `g_CameraSlots` | `CameraSlot[4]` (stride `0xC60`) | ✅ |
+| `0x801C2FF4` | `g_CameraFuncPtr` | `void*` | ✅ |
+| `0x801C3200` | `g_CameraTable` | `CameraEntry*` | ✅ |
+| `0x801eb560` | `g_CameraBuffer` | `uint32_t[8]` | ✅ |
 
 ---
 
@@ -395,7 +453,10 @@ Formatos de Textura:
 - [ ] **Relação HP:** `EngineState.rion_hp_mirror` vs `GlobalCombatState->hp` — são o mesmo dado ou cópias sincronizadas?
 - [ ] **Slot de Gameplay:** qual índice (0-15) contém `Handle_Combat_State`?
 - [ ] **Tamanho total da EngineState:** gap entre `0x801ACB66` e `0x801AE158` ainda não mapeado
-- [ ] **Sistema de câmera:** não identificado — próxima prioridade
+- [x] **Sistema de câmera:** mapeado parcialmente — `Camera_LoadToGTE` e `Camera_Manager` confirmados
+- [ ] **Camera_Select (0x80187350):** 20 XREFs — prioridade ALTA
+- [ ] **CameraSlot interno (0x004 – 0xC3D):** payload não mapeado entre `func_ptr` e `active_flag`
+- [ ] **Relação `g_CameraTable` ↔ `g_CameraSlots`:** 0x801C3200 cai dentro do range dos slots (0x801C1778 + 0x3180) — verificar sobreposição
 - [ ] **DrawOTag / ClearOTag:** endereços não confirmados
 - [ ] **Engine_EnqueueLoadImage:** endereço a confirmar
 - [ ] **FUN_80184f24 / FUN_801850c4 callers adicionais:** `FUN_80184f24` e `FUN_801850c4` têm outros XREFs a analisar
@@ -410,7 +471,7 @@ Formatos de Textura:
 - [x] Sistema de Input
 - [x] Sistema de Corrotinas
 - [x] Renderer (parcial)
-- [ ] Sistema de Câmera ← próximo
+- [x] Sistema de Câmera (parcial — falta `Camera_Select`)
 - [ ] Sistema de Áudio
 - [ ] Sistema de FMV/MDEC
 - [ ] Overlays de mapa/área
