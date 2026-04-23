@@ -18,13 +18,15 @@
  * Confiança das funções:
  *   0x80187320  ✅ Camera_LoadToGTE
  *   0x8013b584  ✅ Camera_Manager
- *   0x80187350  🟠 Camera_Select (hipótese — 20 XREFs, a confirmar)
+ *   0x80187350  ✅ Camera_RecordFrame
  */
 
 /* ── Constantes ────────────────────────────────────────────── */
-#define CAMERA_SLOT_COUNT    4
-#define CAMERA_SLOT_STRIDE   0xC60       /* bytes entre slots em g_CameraSlots */
-#define GTE_SCRATCHPAD_ADDR  0x1F800168  /* destino de Camera_LoadToGTE (COP2 source) */
+#define CAMERA_SLOT_COUNT            4
+#define CAMERA_SLOT_STRIDE           0xC60  /* bytes entre slots em g_CameraSlots */
+#define GTE_SCRATCHPAD_ADDR          0x1F800168  /* destino de Camera_LoadToGTE (COP2 source) */
+#define CAMERA_HISTORY_STRIDE        0x20   /* bytes por entrada no ring buffer de histórico */
+#define CAMERA_HISTORY_DATA_OFFSET   0x04   /* offset até a primeira entrada no buffer */
 
 /* ── CameraEntry ───────────────────────────────────────────────────
  * Entrada da tabela de câmeras e struct da câmera ativa.
@@ -64,6 +66,10 @@ typedef struct {
 #define g_CameraFuncPtr       (*(void **   )0x801C2FF4)   /* ponteiro da função ativa global */
 #define g_ActiveCameraMatrix  ((CameraEntry *)0x801BFD10) /* matriz ativa — muda a cada frame */
 #define g_CameraTable         ((CameraEntry *)0x801C3200) /* tabela pré-definida da sala */
+/* ✅ 0x801eb544 — ponteiro para o ring buffer de histórico de frames.
+ * O índice de escrita atual (int16) reside em g_CameraHistoryPtr + 2. */
+#define g_CameraHistoryPtr    (*(void **    )0x801eb544)
+#define g_CameraFrameIndex    (*(int16_t *)((uint8_t *)g_CameraHistoryPtr + 2))
 
 /* ── Funções ───────────────────────────────────────────────────── */
 
@@ -73,8 +79,11 @@ void Camera_LoadToGTE(uint32_t *dst);
 /* 0x8013b584 — ✅ Reseta os 4 slots de câmera (active_flag e func_ptr). */
 void Camera_Manager(void);
 
-/* 0x80187350 — 🟠 Seleção de câmera (hipótese, 20 XREFs — a confirmar). */
-void Camera_Select(int index);
+/* 0x80187350 — ✅ Grava frame atual no ring buffer de histórico.
+ * Copia 8 × uint32 de g_CameraBuffer para
+ *   g_CameraHistoryPtr + CAMERA_HISTORY_DATA_OFFSET + (frame_index * CAMERA_HISTORY_STRIDE)
+ * e então incrementa o índice (int16 em g_CameraHistoryPtr + 2). */
+void Camera_RecordFrame(void);
 
 /* ── Port Notes (Fase 2 — PC) ──────────────────────────────────────
  *
@@ -89,10 +98,13 @@ void Camera_Select(int index);
  *    Equivalente a resetar o array de câmeras ao carregar uma cena/sala.
  *    No PC pode ser trocado por memset(scene->cameras, 0, sizeof(...)).
  *
- *  Camera_Select:
- *    Espera-se que copie a entrada da tabela para a câmera ativa e
- *    dispare o upload para a GTE. No PC, equivale a selecionar um ponto
- *    de vista pré-definido e recomputar a view matrix.
+ *  Camera_RecordFrame:
+ *    Grava o estado atual de g_CameraBuffer no ring buffer de histórico.
+ *    Para uma implementação de freecam no PC: interceptar Camera_LoadToGTE
+ *    e substituir o conteúdo de g_CameraBuffer pela view matrix calculada
+ *    a partir da posição e ângulos controlados pelo jogador antes que
+ *    Camera_RecordFrame seja chamada. O ring buffer pode ser ignorado ou
+ *    reaproveitado para interpolação suave em transições de sala/cutscene.
  *
  *  g_CameraBuffer / scratchpad:
  *    No PC, a scratchpad não existe — manter apenas o buffer linear

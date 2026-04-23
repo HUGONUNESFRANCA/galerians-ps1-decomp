@@ -55,6 +55,7 @@ MAPA DE MEMÓRIA GLOBAL
 0x801C1778  g_CameraSlots        (4 × stride 0xC60)
 0x801C2FF4  g_CameraFuncPtr      (callback da câmera ativa)
 0x801C3200  g_CameraTable        (tabela pré-definida por sala)
+0x801eb544  g_CameraHistoryPtr   (ptr para ring buffer de histórico; +2 = frame_index int16)
 0x801eb560  g_CameraBuffer       (uint32[8] — fonte do upload GTE)
 0x1F800168  GTE scratchpad       (destino de Camera_LoadToGTE)
 ──────────────────────────────────────────────────────────────
@@ -331,7 +332,7 @@ typedef struct {
 |---|---|---|---|
 | `0x80187320` | `Camera_LoadToGTE` | ✅ | Copia 8 × uint32 de `g_CameraBuffer` para scratchpad GTE (`0x1F800168`) |
 | `0x8013b584` | `Camera_Manager` | ✅ | Reseta 4 slots (stride `0xC60`) — zera `+0xC3E` e `func_ptr` |
-| `0x80187350` | `Camera_Select` | 🟠 | 20 XREFs — hipótese: seleção de câmera. Prioridade ALTA |
+| `0x80187350` | `Camera_RecordFrame` | ✅ | Copia 8 × uint32 de `g_CameraBuffer` → `g_CameraHistoryPtr + 4 + (idx × 0x20)`; incrementa `idx` |
 
 ---
 
@@ -366,6 +367,7 @@ typedef struct {
 | `0x801C1778` | `g_CameraSlots` | `CameraSlot[4]` (stride `0xC60`) | ✅ |
 | `0x801C2FF4` | `g_CameraFuncPtr` | `void*` | ✅ |
 | `0x801C3200` | `g_CameraTable` | `CameraEntry*` | ✅ |
+| `0x801eb544` | `g_CameraHistoryPtr` | `void*` | ✅ |
 | `0x801eb560` | `g_CameraBuffer` | `uint32_t[8]` | ✅ |
 
 ---
@@ -453,8 +455,8 @@ Formatos de Textura:
 - [ ] **Relação HP:** `EngineState.rion_hp_mirror` vs `GlobalCombatState->hp` — são o mesmo dado ou cópias sincronizadas?
 - [ ] **Slot de Gameplay:** qual índice (0-15) contém `Handle_Combat_State`?
 - [ ] **Tamanho total da EngineState:** gap entre `0x801ACB66` e `0x801AE158` ainda não mapeado
-- [x] **Sistema de câmera:** mapeado parcialmente — `Camera_LoadToGTE` e `Camera_Manager` confirmados
-- [ ] **Camera_Select (0x80187350):** 20 XREFs — prioridade ALTA
+- [x] **Sistema de câmera:** pipeline completo mapeado — `Camera_LoadToGTE`, `Camera_Manager` e `Camera_RecordFrame` confirmados
+- [x] **Camera_RecordFrame (0x80187350):** ring buffer de histórico de frames confirmado; `g_CameraHistoryPtr` (0x801eb544) e stride 0x20
 - [ ] **CameraSlot interno (0x004 – 0xC3D):** payload não mapeado entre `func_ptr` e `active_flag`
 - [ ] **Relação `g_CameraTable` ↔ `g_CameraSlots`:** 0x801C3200 cai dentro do range dos slots (0x801C1778 + 0x3180) — verificar sobreposição
 - [ ] **DrawOTag / ClearOTag:** endereços não confirmados
@@ -471,7 +473,7 @@ Formatos de Textura:
 - [x] Sistema de Input
 - [x] Sistema de Corrotinas
 - [x] Renderer (parcial)
-- [x] Sistema de Câmera (parcial — falta `Camera_Select`)
+- [x] Sistema de Câmera (completo — `Camera_LoadToGTE`, `Camera_Manager`, `Camera_RecordFrame`)
 - [ ] Sistema de Áudio
 - [ ] Sistema de FMV/MDEC
 - [ ] Overlays de mapa/área

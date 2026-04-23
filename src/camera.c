@@ -13,9 +13,9 @@
  * referenciam o espaço de RAM PS1 (0x80000000 – 0x801FFFFF) e a
  * scratchpad COP2 em 0x1F800168.
  *
- *   0x80187320  Camera_LoadToGTE  ✅
- *   0x8013b584  Camera_Manager    ✅
- *   0x80187350  Camera_Select     🟠 (stub — 20 XREFs, a confirmar)
+ *   0x80187320  Camera_LoadToGTE    ✅
+ *   0x8013b584  Camera_Manager      ✅
+ *   0x80187350  Camera_RecordFrame  ✅
  *
  * Port Notes (Fase 2 — Windows/OpenGL) estão no final de cada função.
  * ──────────────────────────────────────────────────────────────
@@ -97,24 +97,43 @@ void Camera_Manager(void)
 
 
 /* ────────────────────────────────────────────────────────────────
- * Camera_Select — 0x80187350  🟠 Stub (hipótese)
+ * Camera_RecordFrame — 0x80187350  ✅ Confirmado
  *
- * 20 XREFs apontam para esta função, o que sugere fortemente que
- * seja o ponto de entrada para troca de câmera (triggers de sala,
- * cutscenes, transições). Nome e assinatura ainda a confirmar.
+ * Grava o estado atual de g_CameraBuffer (0x801eb560) no ring buffer
+ * de histórico de câmera apontado por g_CameraHistoryPtr (0x801eb544).
  *
- * TODO:
- *   - Decompilar no Ghidra e validar a assinatura.
- *   - Confirmar se copia g_CameraTable[index] → g_ActiveCameraMatrix.
- *   - Verificar se aciona Camera_LoadToGTE após a cópia.
- *   - Mapear callers para identificar convenções de índice.
+ * Layout do buffer apontado por g_CameraHistoryPtr:
+ *   +0x00  void*    (ponteiro ou cabeçalho)
+ *   +0x02  int16_t  frame_index — índice de escrita atual
+ *   +0x04  uint32_t[8][N]  — entradas (stride 0x20 por frame)
  *
- * PORT NOTE (PC):
- *     Quando confirmado, deve traduzir-se em selecionar um preset
- *     de câmera e recomputar a view matrix da cena.
+ * Pseudocódigo do dump:
+ *     base  = g_CameraHistoryPtr
+ *     idx   = *(int16_t *)(base + 2)
+ *     dst   = (uint32_t *)(base + 0x04 + idx * 0x20)
+ *     for (i = 0; i < 8; i++) dst[i] = g_CameraBuffer[i]
+ *     *(int16_t *)(base + 2) = idx + 1
+ *
+ * PORT NOTE (PC — Freecam):
+ *     Para implementar freecam, interceptar Camera_LoadToGTE e
+ *     substituir o conteúdo de g_CameraBuffer pela view matrix
+ *     construída a partir da posição e ângulos controlados pelo
+ *     jogador antes que Camera_RecordFrame seja chamada.
+ *     O ring buffer de histórico pode ser ignorado completamente
+ *     ou reaproveitado para suavizar transições de sala/cutscene
+ *     via interpolação linear entre frames consecutivos.
  * ─────────────────────────────────────────────────────────────── */
-void Camera_Select(int index)
+void Camera_RecordFrame(void)
 {
-    /* TODO: reconstrução pendente. */
-    (void)index;
+    uint8_t  *base = (uint8_t *)g_CameraHistoryPtr;
+    int16_t   idx  = *(int16_t *)(base + 2);
+    uint32_t *dst  = (uint32_t *)(base + CAMERA_HISTORY_DATA_OFFSET
+                                       + idx * CAMERA_HISTORY_STRIDE);
+    uint32_t *src  = g_CameraBuffer;
+    int i;
+
+    for (i = 0; i < 8; i++)
+        dst[i] = src[i];
+
+    *(int16_t *)(base + 2) = idx + 1;
 }
