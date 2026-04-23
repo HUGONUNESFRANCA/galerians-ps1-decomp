@@ -336,6 +336,53 @@ typedef struct {
 
 ---
 
+## Audio System (In Progress)
+
+### Known State Machine Slots
+
+| Slot | System    | Init Function |
+|------|-----------|---------------|
+| 0    | FMV/Video | `0x8017e040` + `Audio_SetChannel(3,1)` |
+| 4    | BGM Music | `Audio_SetChannel(0,1)` at `0x8017e050` |
+| 5    | SFX       | `Audio_SetChannel(1,1)` at `0x8017e050` |
+| 6    | Voice     | `Audio_SetChannel(2,1)` at `0x8017e050` |
+
+### PS1 SPU Hardware
+
+- SPU base: `0x1F801C00` (hardware register, not RAM)
+- 24 voice channels, each with: pitch, ADSR, volume, start addr
+- Audio RAM: separate 512 KB at `0x1F800000` (Sound RAM)
+- ADPCM compression: 4-bit, 28 samples per block
+
+### Functions to Analyze (Priority Order)
+
+| Address      | Candidate Name    | Why |
+|--------------|-------------------|-----|
+| `0x8017e040` | `Audio_SetMode`   | slot 0 init |
+| `0x8017e050` | `Audio_SetChannel`| slots 4, 5, 6 init |
+| `0x8018281c` | `GetRumbleState`  | SPU-adjacent |
+| `0x80182bdc` | `SetRumble`       | SPU write |
+| `0x80182b5c` | `SetRumbleMode`   | SPU config |
+
+> **audio_search.py results:** 49 SPU register references found across 14 functions.
+> Highest-priority: `0x80187DF4` (22 SPU accesses — likely SpuInit/SpuSetVoiceAttr),
+> `0x80177328` (4 refs), `0x80184898` (3 refs), `0x801836C4` (3 refs).
+> 98 pointer-table candidates at `0x8011A174`–`0x8011B07C` (likely SFX/BGM index tables).
+> VAG headers and XA markers not present in main-RAM dump — require SPU RAM dump
+> and mid-cutscene capture respectively.
+
+### Port Replacement Plan
+
+| PS1 | PC Equivalent |
+|-----|---------------|
+| SPU voices (24 hardware) | OpenAL `AL_SOURCE` per voice |
+| ADPCM decode | libopus or custom 4-bit ADPCM decoder |
+| XA streaming | `SDL_Mixer` music channel |
+| SPU reverb | OpenAL EFX extension |
+| Rumble via SPU/SIO | `SDL_GameController` rumble API |
+
+---
+
 ## 📊 Variáveis Globais Confirmadas
 
 | Endereço | Nome | Tipo | Confiança |
