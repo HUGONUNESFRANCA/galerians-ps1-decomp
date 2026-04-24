@@ -17,9 +17,24 @@
  *   - O rumble do DualShock é enviado via SIO com pacote montado
  *     no scratchpad g_Controllers[2] (0x801AC980).
  *
+ * Dispatch:
+ *   O áudio é despachado por uma vtable de 7+ entradas em
+ *   g_AudioVtable (0x801AC830). Audio_SetChannel (0x8017e050) é
+ *   um wrapper para a tabela B do BIOS (0x000000B0): o caller carrega
+ *   t1 com o índice da função BIOS desejada. Video_SetMode (0x8017e040)
+ *   é o wrapper análogo para a tabela C do BIOS.
+ *   PsyQ_VSync — caller de FUN_8017e040/e050 — confirma a semântica
+ *   dos 4 canais lógicos (BGM / SFX / Voice / FMV).
+ *
  * Confiança das funções:
- *   0x8017e040  🟠 Audio_SetMode  (pode ser Video_SetMode — slot 0)
- *   0x8017e050  🟡 Audio_SetChannel
+ *   0x8017e040  ✅ Video_SetMode      (BIOS table C wrapper)
+ *   0x8017e050  ✅ Audio_SetChannel   (BIOS table B wrapper)
+ *   0x80183a00  ✅ SPU_SetVoiceField
+ *   0x80187DF4  ✅ SPU_CoreDriver     (22 SPU regs + SpuSetVoiceAttr)
+ *   0x80184898  🟡 SPU_SetVolume      (3 SPU refs)
+ *   0x801834B4  🟡 SPU_SetADSR        (2 SPU refs)
+ *   0x80177328  🟡 SPU_KeyOnOff       (4 SPU refs)
+ *   0x8017d558  ✅ Debug_Print        ("VSync: timeout")
  *   0x80182bdc  🟡 SetRumble
  *   0x80182b5c  🟡 SetRumbleMode
  *   0x8018281c  🟡 GetRumbleState
@@ -33,7 +48,7 @@
 #define AUDIO_CH_COUNT  4
 
 /* Slot da state machine correspondente a cada canal:
- *   Slot 0 = FMV   — Audio_SetMode + Audio_SetChannel(AUDIO_CH_FMV, 1)
+ *   Slot 0 = FMV   — Video_SetMode + Audio_SetChannel(AUDIO_CH_FMV, 1)
  *   Slot 4 = BGM   — Audio_SetChannel(AUDIO_CH_BGM,   1)
  *   Slot 5 = SFX   — Audio_SetChannel(AUDIO_CH_SFX,   1)
  *   Slot 6 = Voice — Audio_SetChannel(AUDIO_CH_VOICE, 1)
@@ -42,6 +57,10 @@
 #define AUDIO_SLOT_BGM    4
 #define AUDIO_SLOT_SFX    5
 #define AUDIO_SLOT_VOICE  6
+
+/* ── BIOS Function Tables (PS1 kernel) ───────────────────────── */
+#define BIOS_TABLE_B_ADDR  0x000000B0u  /* usado por Audio_SetChannel via t1 */
+#define BIOS_TABLE_C_ADDR  0x000000C0u  /* usado por Video_SetMode  via t1 */
 
 /* ── SPU — Hardware PS1 ──────────────────────────────────────── */
 #define SPU_VOICE_COUNT      24          /* vozes de hardware disponíveis */
@@ -85,6 +104,42 @@ typedef struct {
 
 /* ── Globais ───────────────────────────────────────────────────── */
 
+/* 0x80195C10 — g_FrameCounter: contador de frames incrementado a cada
+ * VBlank pelo handler de PsyQ_VSync. Usado para timing de eventos
+ * de áudio e sincronização de FMV. */
+#define g_FrameCounter  (*(volatile uint32_t *)0x80195C10u)
+
+/* 0x801AC830 — g_AudioVtable: tabela de despacho do sistema de áudio.
+ * 7+ ponteiros de função; entradas confirmadas:
+ *   [0] 0x80186938
+ *   [1] 0x80186A84
+ *   [2] 0x80186D00
+ *   [3] 0x80186D38
+ *   [4] 0x80186D90
+ *   [5] 0x801871E4
+ * O índice [6] e além ainda não foram dumpados. */
+#define g_AudioVtable   ((void **)0x801AC830u)
+#define AUDIO_VTABLE_KNOWN_ENTRIES  6
+
+/* 0x80194078, 0x80195FD0 — DMA tables do SPU (transferências em bloco
+ * para a SPU RAM). Layout exato a mapear. */
+#define SPU_DMA_TABLE_A_ADDR  0x80194078u
+#define SPU_DMA_TABLE_B_ADDR  0x80195FD0u
+
+/* 0x8011A174 – 0x8011B07C — 5 arrays de ponteiros consecutivos
+ * (164, 111, 102, 100 e 92 entradas). Candidatos fortes a tabelas de
+ * índice de SFX e BGM. A divisão por canal lógico está pendente de
+ * confirmação no Ghidra. */
+#define SOUND_TABLE_BASE      0x8011A174u
+#define SOUND_TABLE_END       0x8011B07Cu
+#define SOUND_TABLE_COUNT     5
+/* contagens por tabela (em ordem de endereço) */
+#define SOUND_TABLE_0_ENTRIES 164
+#define SOUND_TABLE_1_ENTRIES 111
+#define SOUND_TABLE_2_ENTRIES 102
+#define SOUND_TABLE_3_ENTRIES 100
+#define SOUND_TABLE_4_ENTRIES  92
+
 /* 0x801AC980 — g_Controllers[2]: terceiro canal do array de controle
  * (base 0x801AC900, stride 0x40). Usado como scratchpad para o pacote
  * de rumble enviado ao DualShock via SIO. Os campos relevantes são:
@@ -94,15 +149,44 @@ typedef struct {
 
 /* ── Funções ───────────────────────────────────────────────────── */
 
-/* 0x8017e040 — 🟠 Inicialização do slot 0 (FMV/Vídeo).
- * Nome incerto: pode ser Video_SetMode ou Audio_SetMode.
- * Chamado por StateSlot_Allocate durante a inicialização do slot 0. */
-void Audio_SetMode(void);
+/* 0x8017e040 — ✅ Video_SetMode(mode): wrapper para a tabela C do BIOS
+ * (0x000000C0). Carrega t1 com o índice da função BIOS desejada e salta.
+ * Chamado pelo init do slot 0 (FMV/Vídeo). */
+void Video_SetMode(int mode);
 
-/* 0x8017e050 — 🟡 Ativa ou desativa um canal de áudio lógico.
- * channel: AUDIO_CH_BGM(0) / SFX(1) / VOICE(2) / FMV(3)
- * param:   1 = ativar, 0 = desativar (hipótese) */
-void Audio_SetChannel(int channel, int param);
+/* 0x8017e050 — ✅ Audio_SetChannel(channel, enable): wrapper para a
+ * tabela B do BIOS (0x000000B0). channel: AUDIO_CH_*; enable: 1=ativar,
+ * 0=desativar. Confirmado por PsyQ_VSync. */
+void Audio_SetChannel(int channel, int enable);
+
+/* 0x80183a00 — ✅ SPU_SetVoiceField(voice_ptr, data, flag):
+ * escreve param_2 em voice+0x28 e param_3 em voice+0x34.
+ * Os offsets +0x28 / +0x34 indicam que voice_ptr não aponta para os
+ * registradores de hardware (stride 0x10) e sim para uma struct de
+ * estado de voz mantida em RAM principal. */
+void SPU_SetVoiceField(void *voice_ptr, uint32_t data, uint32_t flag);
+
+/* 0x80187DF4 — ✅ SPU_CoreDriver(): driver central do SPU.
+ * 22 acessos a registradores SPU + chamada a SpuSetVoiceAttr.
+ * Provavelmente o tick por frame que reprograma todas as vozes ativas. */
+void SPU_CoreDriver(void);
+
+/* 0x80184898 — 🟡 SPU_SetVolume(): 3 acessos a registradores SPU.
+ * Provavelmente ajusta volume master ou per-voice. Assinatura exata
+ * a confirmar. */
+void SPU_SetVolume(int voice, int vol_left, int vol_right);
+
+/* 0x801834B4 — 🟡 SPU_SetADSR(): 2 acessos a registradores SPU.
+ * Programa adsr_lo / adsr_hi de uma voz. */
+void SPU_SetADSR(int voice, uint16_t adsr_lo, uint16_t adsr_hi);
+
+/* 0x80177328 — 🟡 SPU_KeyOnOff(): 4 acessos a registradores SPU.
+ * Provavelmente bate em SPU_KEY_ON / SPU_KEY_OFF (0x1F801D88 / D8C). */
+void SPU_KeyOnOff(uint32_t key_on_mask, uint32_t key_off_mask);
+
+/* 0x8017d558 — ✅ Debug_Print(string): print de debug.
+ * Confirmado pela string "VSync: timeout" passada como argumento. */
+void Debug_Print(const char *string);
 
 /* 0x80182bdc — 🟡 Aciona os motores de vibração do DualShock.
  * channel: 0 = motor pequeno (on/off), 1 = motor grande (0x00–0xFF)
@@ -122,36 +206,51 @@ int GetRumbleState(int channel);
 
 /* ── Port Notes (Fase 2 — PC) ──────────────────────────────────────
  *
- *  SPU (24 vozes) → OpenAL:
- *    Cada voz SPU mapeia para uma AL source:
- *        alGenSources(SPU_VOICE_COUNT, al_sources);
- *    Pitch: voice.pitch codifica a taxa relativa à 44100 Hz.
- *        float al_pitch = (float)voice.pitch / SPU_PITCH_BASE;
- *        alSourcef(src, AL_PITCH, al_pitch);
- *    O ADSR de hardware deve ser simulado via AL_GAIN por frame.
+ *  Audio_SetChannel  → SDL_Mixer channel enable/disable
+ *      Mapear cada canal lógico (BGM/SFX/Voice/FMV) para um channel
+ *      group de SDL_Mixer (Mix_GroupChannel + Mix_HaltGroup).
+ *
+ *  Video_SetMode     → desnecessário no port; substituído pelo decoder
+ *      de FMV do PC (avcodec). Manter como no-op.
+ *
+ *  SPU_CoreDriver    → OpenAL alGenSources + alSourcei por voz:
+ *      alGenSources(SPU_VOICE_COUNT, al_sources);
+ *      O tick por frame reprograma pitch/volume/loop de cada source.
+ *
+ *  SPU_KeyOnOff      → alSourcePlay / alSourceStop (por bit de máscara).
+ *
+ *  SPU_SetVolume     → alSourcef(src, AL_GAIN, vol).
+ *
+ *  SPU_SetADSR       → ADSR em software (sem equivalente direto em OpenAL):
+ *      Aplicar a envelope sobre AL_GAIN a cada frame; opcionalmente
+ *      pré-renderizar a curva no buffer PCM se a voz não muda de ADSR.
+ *
+ *  SPU_SetVoiceField → escrever no shadow state em RAM; o tick do
+ *      SPU_CoreDriver propaga para a source OpenAL no próximo frame.
+ *
+ *  g_FrameCounter    → PC frame counter via QueryPerformanceCounter
+ *      (ou std::chrono::steady_clock no C++). Atualizar por VSync do PC.
+ *
+ *  Sound tables em 0x8011A174 → carregar como índice de assets PC:
+ *      sound_table[i] vira um path para arquivo OGG/WAV no disco
+ *      ou um ID em um asset bundle. As 5 tabelas viram 5 categorias.
  *
  *  ADPCM → PCM16:
- *    Todo áudio PS1 está em ADPCM 4-bit (blocos de 16 bytes = 28 amostras).
- *    Decodificar para PCM16 antes de criar o buffer OpenAL:
- *        alBufferData(buf, AL_FORMAT_MONO16, pcm, size, sample_rate);
- *    Usar libavcodec (FFmpeg) ou um decoder ADPCM embutido.
+ *      Decodificar offline (no asset pipeline) e shipar OGG/WAV.
+ *      Ver libavcodec ou um decoder ADPCM PS1 embutido.
  *
  *  XA-ADPCM (FMV) → streaming OpenAL:
- *    XA-ADPCM não passa pela SPU RAM — é lido diretamente do CD-ROM
- *    em setores Mode2/Form2. No PC:
- *        Extrair setores XA do .bin/.iso com libcdio.
- *        Decodificar XA-ADPCM (estéreo, 37800 Hz ou 18900 Hz).
- *        Fazer stream para OpenAL via buffer circular (AL_STREAMING).
- *
- *  Audio_SetChannel → mixer track:
- *    Equivale a registrar/destruir um mixer track por canal.
- *    No PC: alGenSources por canal lógico, ou SDL_mixer channel.
+ *      Extrair setores XA do .bin/.iso com libcdio.
+ *      Decodificar XA-ADPCM (estéreo, 37800 Hz ou 18900 Hz).
+ *      Stream para OpenAL via buffer circular (AL_STREAMING).
  *
  *  Rumble → XInput / SDL2:
- *    SetRumble / SetRumbleMode / GetRumbleState substituem-se por:
- *        XInputSetState(0, &XINPUT_VIBRATION{lo, hi});  // Win32
- *        SDL_GameControllerRumble(ctrl, lo, hi, ms);    // SDL2
- *    O scratchpad em RUMBLE_SCRATCHPAD_ADDR pode ser descartado no port.
+ *      SetRumble / SetRumbleMode / GetRumbleState substituem-se por:
+ *          XInputSetState(0, &XINPUT_VIBRATION{lo, hi});  // Win32
+ *          SDL_GameControllerRumble(ctrl, lo, hi, ms);    // SDL2
+ *      O scratchpad em RUMBLE_SCRATCHPAD_ADDR pode ser descartado.
+ *
+ *  Debug_Print       → fprintf(stderr, ...) ou logger do port.
  */
 
 #endif /* AUDIO_H */

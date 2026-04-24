@@ -18,9 +18,15 @@ MAPA DE MEMÓRIA GLOBAL
 0x8011b958  String PsyQ "$Id: sys.c,v_1.140 1998/01/12"
 0x80193358  Ordering Table buffer 0 (renderer)
 0x80193888  Ordering Table buffer 1 (renderer)
+0x80194078  SPU_DMA_Table_A           (transfers para SPU RAM)
 0x80194b48  g_StateChannelFlags
 0x80194b4c  g_StateChannelTable
 0x80195bd8  g_AudioStateMask (ptr)
+0x80195C10  g_FrameCounter            (uint32_t, ++ a cada VBlank)
+0x80195FD0  SPU_DMA_Table_B
+0x8011A174  Sound tables base         (5 arrays: 164/111/102/100/92 ptrs)
+0x8011B07C  Sound tables end
+0x801AC830  g_AudioVtable             (void*[7+], dispatch de áudio)
 0x801AC8D0  g_ControllerFlags[16]
 0x801AC8D8  EngineState — INÍCIO REAL DA STRUCT
 0x801AC900  EngineState.channel_table[0]  ← g_EngineBase aponta aqui (+0x28)
@@ -336,50 +342,100 @@ typedef struct {
 
 ---
 
-## Audio System (In Progress)
+## Audio System
+
+### Architecture
+
+O áudio é despachado por uma vtable de 7+ entradas em `g_AudioVtable`
+(`0x801AC830`). As funções de entrada `Audio_SetChannel` (`0x8017e050`)
+e `Video_SetMode` (`0x8017e040`) são wrappers para as **tabelas B/C do
+BIOS PS1** (`0x000000B0` / `0x000000C0`): o caller carrega o registrador
+**t1** com o índice da função BIOS desejada e chama o wrapper.
+
+`PsyQ_VSync` é o caller comum de `FUN_8017e040` e `FUN_8017e050` — é
+desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
+
+### g_AudioVtable @ 0x801AC830 — entradas confirmadas
+
+| Index | Address      |
+|-------|--------------|
+| [0]   | `0x80186938` |
+| [1]   | `0x80186A84` |
+| [2]   | `0x80186D00` |
+| [3]   | `0x80186D38` |
+| [4]   | `0x80186D90` |
+| [5]   | `0x801871E4` |
+| [6+]  | (a dumpar)   |
 
 ### Known State Machine Slots
 
 | Slot | System    | Init Function |
 |------|-----------|---------------|
-| 0    | FMV/Video | `0x8017e040` + `Audio_SetChannel(3,1)` |
+| 0    | FMV/Video | `Video_SetMode(0)` (0x8017e040) + `Audio_SetChannel(3,1)` |
 | 4    | BGM Music | `Audio_SetChannel(0,1)` at `0x8017e050` |
 | 5    | SFX       | `Audio_SetChannel(1,1)` at `0x8017e050` |
 | 6    | Voice     | `Audio_SetChannel(2,1)` at `0x8017e050` |
 
+### Confirmed Functions
+
+| Address      | Name                | Confiança | Notes |
+|--------------|---------------------|:---------:|-------|
+| `0x8017e040` | `Video_SetMode`     | ✅ | BIOS table C wrapper (mode arg) |
+| `0x8017e050` | `Audio_SetChannel`  | ✅ | BIOS table B wrapper (channel, enable); channels 0=BGM, 1=SFX, 2=Voice, 3=FMV |
+| `0x80183A00` | `SPU_SetVoiceField` | ✅ | escreve `voice+0x28 = data`, `voice+0x34 = flag` (shadow state em RAM) |
+| `0x80187DF4` | `SPU_CoreDriver`    | ✅ | 22 acessos a registradores SPU + `SpuSetVoiceAttr` |
+| `0x80184898` | `SPU_SetVolume`     | 🟡 | 3 SPU refs |
+| `0x801834B4` | `SPU_SetADSR`       | 🟡 | 2 SPU refs |
+| `0x80177328` | `SPU_KeyOnOff`      | 🟡 | 4 SPU refs (provavelmente `SPU_KEY_ON/OFF`) |
+| `0x8017D558` | `Debug_Print`       | ✅ | Confirmado pela string `"VSync: timeout"` |
+| `0x80182bdc` | `SetRumble`         | 🟡 | DualShock motor write |
+| `0x80182b5c` | `SetRumbleMode`     | 🟡 | DualShock config |
+| `0x8018281c` | `GetRumbleState`    | 🟡 | DualShock state read |
+
 ### PS1 SPU Hardware
 
-- SPU base: `0x1F801C00` (hardware register, not RAM)
-- 24 voice channels, each with: pitch, ADSR, volume, start addr
-- Audio RAM: separate 512 KB at `0x1F800000` (Sound RAM)
+- SPU base: `0x1F801C00` (registradores de voz)
+- 24 voice channels, stride `0x10` (`pitch`, `ADSR`, `volume`, `start addr`)
+- Audio RAM: 512 KB dedicada em `0x1F800000` (Sound RAM)
 - ADPCM compression: 4-bit, 28 samples per block
+- DMA tables (transfers para SPU RAM): `0x80194078` e `0x80195FD0`
 
-### Functions to Analyze (Priority Order)
+### Sound Tables — `0x8011A174` – `0x8011B07C`
 
-| Address      | Candidate Name    | Why |
-|--------------|-------------------|-----|
-| `0x8017e040` | `Audio_SetMode`   | slot 0 init |
-| `0x8017e050` | `Audio_SetChannel`| slots 4, 5, 6 init |
-| `0x8018281c` | `GetRumbleState`  | SPU-adjacent |
-| `0x80182bdc` | `SetRumble`       | SPU write |
-| `0x80182b5c` | `SetRumbleMode`   | SPU config |
+5 arrays de ponteiros consecutivos. Layout em ordem de endereço:
 
-> **audio_search.py results:** 49 SPU register references found across 14 functions.
-> Highest-priority: `0x80187DF4` (22 SPU accesses — likely SpuInit/SpuSetVoiceAttr),
-> `0x80177328` (4 refs), `0x80184898` (3 refs), `0x801836C4` (3 refs).
-> 98 pointer-table candidates at `0x8011A174`–`0x8011B07C` (likely SFX/BGM index tables).
-> VAG headers and XA markers not present in main-RAM dump — require SPU RAM dump
-> and mid-cutscene capture respectively.
+| Index | Entries |
+|-------|---------|
+| 0     | 164     |
+| 1     | 111     |
+| 2     | 102     |
+| 3     | 100     |
+| 4     | 92      |
+
+Total ≈ 569 entradas. Candidatos fortes a tabelas de índice de SFX e
+BGM. A divisão exata por canal lógico (BGM/SFX/Voice) ainda precisa ser
+confirmada via XREFs no Ghidra. VAG headers e XA markers não estão
+presentes no dump de main-RAM — requerem dump de SPU RAM e captura no
+meio de uma cutscene, respectivamente.
 
 ### Port Replacement Plan
 
-| PS1 | PC Equivalent |
-|-----|---------------|
-| SPU voices (24 hardware) | OpenAL `AL_SOURCE` per voice |
-| ADPCM decode | libopus or custom 4-bit ADPCM decoder |
-| XA streaming | `SDL_Mixer` music channel |
-| SPU reverb | OpenAL EFX extension |
-| Rumble via SPU/SIO | `SDL_GameController` rumble API |
+| PS1                                   | PC Equivalent |
+|---------------------------------------|---------------|
+| `Audio_SetChannel`                    | `SDL_Mixer` channel enable/disable (`Mix_GroupChannel`/`Mix_HaltGroup`) |
+| `Video_SetMode`                       | no-op (decoder de FMV PC gerencia próprio estado) |
+| `SPU_CoreDriver`                      | OpenAL `alGenSources` + `alSourcei` por voz; tick por frame propaga shadow → source |
+| `SPU_KeyOnOff`                        | `alSourcePlay` / `alSourceStop` por bit de máscara |
+| `SPU_SetVolume`                       | `alSourcef(src, AL_GAIN, vol)` |
+| `SPU_SetADSR`                         | ADSR em software (curva sobre `AL_GAIN` por frame) |
+| SPU voices (24 hardware)              | OpenAL `AL_SOURCE` por voz (24 sources) |
+| ADPCM decode                          | decoder offline; shipar OGG/WAV |
+| XA streaming                          | `SDL_Mixer` music channel via `AL_STREAMING` |
+| SPU reverb                            | OpenAL EFX extension |
+| Rumble via SPU/SIO                    | `SDL_GameController` rumble / `XInputSetState` |
+| `g_FrameCounter`                      | PC frame counter via `QueryPerformanceCounter` |
+| Sound tables em `0x8011A174`          | índice de assets PC (paths/IDs por categoria) |
+| `Debug_Print`                         | `fprintf(stderr, ...)` ou logger do port |
 
 ---
 
@@ -416,6 +472,11 @@ typedef struct {
 | `0x801C3200` | `g_CameraTable` | `CameraEntry*` | ✅ |
 | `0x801eb544` | `g_CameraHistoryPtr` | `void*` | ✅ |
 | `0x801eb560` | `g_CameraBuffer` | `uint32_t[8]` | ✅ |
+| `0x80195C10` | `g_FrameCounter` | `uint32_t` | ✅ |
+| `0x801AC830` | `g_AudioVtable` | `void*[7+]` | ✅ |
+| `0x80194078` | `SPU_DMA_Table_A` | `uint32_t*` | 🟡 |
+| `0x80195FD0` | `SPU_DMA_Table_B` | `uint32_t*` | 🟡 |
+| `0x8011A174` | `g_SoundTables` | `void**[5]` | 🟡 |
 
 ---
 

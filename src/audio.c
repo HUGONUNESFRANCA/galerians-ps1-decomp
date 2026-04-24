@@ -13,14 +13,33 @@
  * Todos os corpos são stubs documentados — o código real será
  * reconstruído após disassembly completo de cada função.
  *
- *   0x8017e040  Audio_SetMode      🟠  (pode ser Video_SetMode)
- *   0x8017e050  Audio_SetChannel   🟡
+ * Dispatch:
+ *   g_AudioVtable @ 0x801AC830 (7+ entradas) — tabela de despacho
+ *   das funções de áudio do jogo. Audio_SetChannel e Video_SetMode
+ *   são, na verdade, wrappers para as tabelas B/C do BIOS PS1: o
+ *   caller carrega t1 com o índice da função BIOS e chama o wrapper.
+ *
+ * BIOS / Wrappers:
+ *   0x8017e040  Video_SetMode    ✅  (BIOS table C @ 0x000000C0)
+ *   0x8017e050  Audio_SetChannel ✅  (BIOS table B @ 0x000000B0)
+ *
+ * SPU Core:
+ *   0x80187DF4  SPU_CoreDriver     ✅  22 acessos SPU + SpuSetVoiceAttr
+ *   0x80183a00  SPU_SetVoiceField  ✅  escreve voice+0x28 e voice+0x34
+ *   0x80184898  SPU_SetVolume      🟡  3 SPU refs
+ *   0x801834B4  SPU_SetADSR        🟡  2 SPU refs
+ *   0x80177328  SPU_KeyOnOff       🟡  4 SPU refs
+ *
+ * Debug:
+ *   0x8017d558  Debug_Print        ✅  ("VSync: timeout")
+ *
+ * Rumble:
  *   0x80182bdc  SetRumble          🟡
  *   0x80182b5c  SetRumbleMode      🟡
  *   0x8018281c  GetRumbleState     🟡
  *
  * Contexto de inicialização — StateSlot_Allocate:
- *   Audio_SetMode()               → slot 0 (FMV/Vídeo)
+ *   Video_SetMode(0)                    → slot 0 (FMV/Vídeo)
  *   Audio_SetChannel(AUDIO_CH_FMV,   1) → slot 0
  *   Audio_SetChannel(AUDIO_CH_BGM,   1) → slot 4
  *   Audio_SetChannel(AUDIO_CH_SFX,   1) → slot 5
@@ -28,75 +47,192 @@
  *
  * Hardware:
  *   SPU: 24 vozes ADPCM, RAM 512 KB, base 0x1F801C00.
+ *   DMA tables em 0x80194078 e 0x80195FD0.
  *   Rumble DualShock: pacote SIO montado em g_Controllers[2] (0x801AC980).
+ *
+ * Globais relacionados:
+ *   0x80195C10  g_FrameCounter (uint32_t) — incrementado por VBlank
+ *   0x801AC830  g_AudioVtable  (void*[7+]) — dispatch table
+ *   0x8011A174  Sound tables   — 5 arrays de ponteiros (164/111/102/100/92)
  * ──────────────────────────────────────────────────────────────
  */
 
 
 /* ────────────────────────────────────────────────────────────────
- * Audio_SetMode — 0x8017e040  🟠 Nome incerto
+ * Video_SetMode — 0x8017e040  ✅ Confirmado
  *
- * Chamada durante StateSlot_Allocate para o slot 0 (FMV/Vídeo).
- * A incerteza do nome existe porque o slot 0 concentra tanto a
- * decodificação MDEC de vídeo quanto o canal XA-ADPCM de áudio.
+ * Wrapper para a tabela C do BIOS PS1 (0x000000C0). O caller carrega
+ * o registrador t1 com o índice da função BIOS desejada e chama esta
+ * rotina, que executa um indirect jump via tabela.
  *
- * Hipóteses (mutuamente exclusivas até confirmar no Ghidra):
- *   A) Configura o modo MDEC para streaming de FMV (Video_SetMode).
- *   B) Inicializa o canal XA-ADPCM do CD-ROM (Audio_SetMode).
- *   C) Setup conjunto: inicializa os dois sistemas para FMV.
- *
- * TODO:
- *   - Identificar se o primeiro call interno é libmdec (DecDCTReset)
- *     ou libcd (CdInit / CdlSetMode com FLAG_XA).
- *   - Verificar XREFs — se outros callers existirem fora do slot 0,
- *     é provável que seja uma função de áudio pura.
+ * Chamado pelo init do slot 0 (FMV/Vídeo) em StateSlot_Allocate.
+ * Provavelmente programa o modo MDEC para streaming de FMV.
  *
  * PORT NOTE (PC):
- *   Se Video_SetMode: inicializar decoder de FMV
- *       (ex: avcodec_find_decoder para o codec MDEC/MPEG-like do .STR).
- *   Se Audio_SetMode puro: criar o stream OpenAL para XA-ADPCM e
- *       iniciar o thread de decodificação de setor.
+ *   Inútil no port — substituir por no-op. O decoder de FMV do PC
+ *   (avcodec) gerencia o próprio estado.
  * ─────────────────────────────────────────────────────────────── */
-void Audio_SetMode(void)
+void Video_SetMode(int mode)
+{
+    /* TODO: reconstrução pendente. */
+    (void)mode;
+}
+
+
+/* ────────────────────────────────────────────────────────────────
+ * Audio_SetChannel — 0x8017e050  ✅ Confirmado
+ *
+ * Wrapper para a tabela B do BIOS PS1 (0x000000B0). O caller carrega
+ * o registrador t1 com o índice da função BIOS de áudio (key on/off,
+ * set volume, etc) e chama esta rotina.
+ *
+ * Padrão de chamada confirmado em StateSlot_Allocate (via PsyQ_VSync,
+ * que é o caller comum de FUN_8017e040 e FUN_8017e050):
+ *   Audio_SetChannel(AUDIO_CH_BGM,   1)  → slot 4
+ *   Audio_SetChannel(AUDIO_CH_SFX,   1)  → slot 5
+ *   Audio_SetChannel(AUDIO_CH_VOICE, 1)  → slot 6
+ *   Audio_SetChannel(AUDIO_CH_FMV,   1)  → slot 0
+ *
+ * channel: AUDIO_CH_BGM(0) / SFX(1) / VOICE(2) / FMV(3)
+ * enable:  1 = ativar, 0 = desativar
+ *
+ * PORT NOTE (PC):
+ *   Mapear cada canal lógico para um channel group de SDL_Mixer:
+ *       Mix_GroupChannel(ch, channel);   // enable
+ *       Mix_HaltGroup(channel);          // disable
+ * ─────────────────────────────────────────────────────────────── */
+void Audio_SetChannel(int channel, int enable)
+{
+    /* TODO: reconstrução pendente. */
+    (void)channel;
+    (void)enable;
+}
+
+
+/* ────────────────────────────────────────────────────────────────
+ * SPU_SetVoiceField — 0x80183a00  ✅ Confirmado
+ *
+ * Escreve dois campos de uma struct de voz mantida em RAM principal:
+ *   voice_ptr + 0x28  ← data
+ *   voice_ptr + 0x34  ← flag
+ *
+ * Os offsets (0x28 / 0x34) estão muito além do stride de 0x10 dos
+ * registradores SPU de hardware — então voice_ptr aponta para uma
+ * struct shadow em RAM, não para o hardware. O SPU_CoreDriver
+ * (0x80187DF4) provavelmente consome esse shadow a cada tick.
+ *
+ * PORT NOTE (PC):
+ *   Manter o shadow state como struct C; o equivalente OpenAL é
+ *   aplicado em SPU_CoreDriver, não aqui.
+ * ─────────────────────────────────────────────────────────────── */
+void SPU_SetVoiceField(void *voice_ptr, uint32_t data, uint32_t flag)
+{
+    /* TODO: reconstrução pendente. */
+    (void)voice_ptr;
+    (void)data;
+    (void)flag;
+}
+
+
+/* ────────────────────────────────────────────────────────────────
+ * SPU_CoreDriver — 0x80187DF4  ✅ Confirmado
+ *
+ * Driver central do SPU. Faz 22 acessos a registradores SPU e chama
+ * SpuSetVoiceAttr (libsnd do PsyQ). Provavelmente o tick por frame
+ * que reprograma todas as vozes ativas com base no shadow state.
+ *
+ * PORT NOTE (PC):
+ *   O equivalente é o tick que percorre as 24 sources OpenAL e
+ *   aplica pitch/volume/loop a cada frame:
+ *       for (int v = 0; v < SPU_VOICE_COUNT; v++) {
+ *           alSourcef(al_sources[v], AL_PITCH, voice[v].pitch / 4096.f);
+ *           alSourcef(al_sources[v], AL_GAIN,  voice[v].vol_left / 32767.f);
+ *           ...
+ *       }
+ * ─────────────────────────────────────────────────────────────── */
+void SPU_CoreDriver(void)
 {
     /* TODO: reconstrução pendente. */
 }
 
 
 /* ────────────────────────────────────────────────────────────────
- * Audio_SetChannel — 0x8017e050  🟡 Alta confiança
+ * SPU_SetVolume — 0x80184898  🟡 Alta confiança
  *
- * Registra e ativa um dos 4 canais de áudio lógicos do jogo.
- * O padrão de chamada confirma os 4 canais: BGM(0), SFX(1),
- * Voice(2), FMV(3) — cada um corresponde a um slot da state machine.
- *
- * Padrão de chamada observado em StateSlot_Allocate:
- *   Audio_SetChannel(AUDIO_CH_FMV,   1)  → slot 0
- *   Audio_SetChannel(AUDIO_CH_BGM,   1)  → slot 4
- *   Audio_SetChannel(AUDIO_CH_SFX,   1)  → slot 5
- *   Audio_SetChannel(AUDIO_CH_VOICE, 1)  → slot 6
- *
- * Hipótese: param=1 ativa o canal (aloca vozes SPU / habilita o
- * mixer track). param=0 provavelmente desativa/libera o canal.
- * O canal indexa provavelmente uma tabela interna de configuração
- * com: base na SPU RAM, número de vozes reservadas, volume inicial.
- *
- * TODO:
- *   - Confirmar se mantém um array global de estado por canal.
- *   - Verificar se param pode ser um volume inicial em vez de
- *     simples on/off.
- *   - Mapear a tabela de configuração que provavelmente indexa.
+ * 3 acessos a registradores SPU. Provavelmente programa vol_left /
+ * vol_right de uma voz (offsets +0x00 / +0x02) ou o volume master.
+ * Assinatura exata a confirmar — usando o caso per-voice como hipótese.
  *
  * PORT NOTE (PC):
- *   Equivale a criar um mixer track por canal lógico:
- *       channel_sources[channel] = al_create_source();  // OpenAL
- *   ou registrar um canal em SDL_mixer / miniaudio.
+ *   alSourcef(al_sources[voice], AL_GAIN, max(vl, vr) / 32767.f);
+ *   ou usar OpenAL EFX para pan stereo se vl != vr.
  * ─────────────────────────────────────────────────────────────── */
-void Audio_SetChannel(int channel, int param)
+void SPU_SetVolume(int voice, int vol_left, int vol_right)
 {
     /* TODO: reconstrução pendente. */
-    (void)channel;
-    (void)param;
+    (void)voice;
+    (void)vol_left;
+    (void)vol_right;
+}
+
+
+/* ────────────────────────────────────────────────────────────────
+ * SPU_SetADSR — 0x801834B4  🟡 Alta confiança
+ *
+ * 2 acessos a registradores SPU. Programa adsr_lo (+0x08) e adsr_hi
+ * (+0x0A) de uma voz — o envelope ADSR do hardware.
+ *
+ * PORT NOTE (PC):
+ *   OpenAL não tem ADSR nativo. Implementar em software:
+ *       Aplicar uma curva sobre AL_GAIN por frame, com base nos
+ *       parâmetros (attack rate, decay rate, sustain level, release).
+ *       Pré-renderizar a curva PCM se a voz não muda de ADSR.
+ * ─────────────────────────────────────────────────────────────── */
+void SPU_SetADSR(int voice, uint16_t adsr_lo, uint16_t adsr_hi)
+{
+    /* TODO: reconstrução pendente. */
+    (void)voice;
+    (void)adsr_lo;
+    (void)adsr_hi;
+}
+
+
+/* ────────────────────────────────────────────────────────────────
+ * SPU_KeyOnOff — 0x80177328  🟡 Alta confiança
+ *
+ * 4 acessos a registradores SPU. Provavelmente bate em SPU_KEY_ON
+ * (0x1F801D88, 24-bit mask) e SPU_KEY_OFF (0x1F801D8C). Cada bit da
+ * máscara corresponde a uma voz.
+ *
+ * PORT NOTE (PC):
+ *   for (int v = 0; v < SPU_VOICE_COUNT; v++) {
+ *       if (key_on_mask  & (1u << v)) alSourcePlay(al_sources[v]);
+ *       if (key_off_mask & (1u << v)) alSourceStop(al_sources[v]);
+ *   }
+ * ─────────────────────────────────────────────────────────────── */
+void SPU_KeyOnOff(uint32_t key_on_mask, uint32_t key_off_mask)
+{
+    /* TODO: reconstrução pendente. */
+    (void)key_on_mask;
+    (void)key_off_mask;
+}
+
+
+/* ────────────────────────────────────────────────────────────────
+ * Debug_Print — 0x8017d558  ✅ Confirmado
+ *
+ * Função de print de debug — confirmada porque PsyQ_VSync chama
+ * Debug_Print("VSync: timeout") quando o VBlank wait excede o limite.
+ * Tipo de saída (TTY do PsyQ / printf interno) ainda não determinado.
+ *
+ * PORT NOTE (PC):
+ *   fprintf(stderr, "%s\n", string);
+ *   ou redirecionar para o logger do port.
+ * ─────────────────────────────────────────────────────────────── */
+void Debug_Print(const char *string)
+{
+    /* TODO: reconstrução pendente. */
+    (void)string;
 }
 
 
@@ -111,16 +247,6 @@ void Audio_SetChannel(int channel, int param)
  * Os bytes de controle são escritos no scratchpad
  * g_Controllers[2] (0x801AC980, campo rumble_data +0x24) e
  * enviados ao controle via SIO no próximo ciclo de poll.
- *
- * Formato do pacote SIO de rumble (hipótese PsyQ):
- *   byte[0] = intensidade motor pequeno (0x00 / 0xFF)
- *   byte[1] = intensidade motor grande  (0x00–0xFF)
- *
- * TODO:
- *   - Confirmar layout exato do pacote no scratchpad.
- *   - Verificar se 'mode' seleciona entre rumble one-shot vs.
- *     contínuo, ou alterna entre os dois motores.
- *   - Mapear relação com SetRumbleMode (0x80182b5c).
  *
  * PORT NOTE (PC):
  *   XInput:
@@ -146,17 +272,6 @@ void SetRumble(int channel, uint32_t data, int mode)
  * controle mais fino do que SetRumble — duração, padrão pulsado,
  * ou seleção entre motores via campos da struct.
  *
- * Relação com SetRumble: pode ser a versão "parametrizada", onde
- * SetRumble é um wrapper de conveniência para casos simples.
- *
- * TODO:
- *   - Mapear a struct apontada por ptr. Campos esperados:
- *       uint8_t  motor_small;   // 0x00 / 0xFF
- *       uint8_t  motor_large;   // 0x00–0xFF
- *       uint16_t duration;      // em frames (hipótese)
- *   - Verificar se escreve diretamente em g_Controllers[2]
- *     ou usa uma tabela de agendamento de eventos de rumble.
- *
  * PORT NOTE (PC):
  *   Implementar como wrapper sobre XInputSetState / SDL_GameControllerRumble
  *   com duração gerenciada por um timer do lado do port.
@@ -176,17 +291,7 @@ void SetRumbleMode(int channel, void *ptr)
  * Provavelmente lê o campo vibration_active (+0x38) ou
  * rumble_data (+0x24) de g_Controllers[2] (0x801AC980).
  *
- * Usado para: verificar se um efeito de rumble ainda está ativo
- * antes de disparar outro, ou para sincronizar animações com
- * o feedback háptico (ex: tiro, dano).
- *
  * Retorno: 0 = motor parado, != 0 = motor ativo.
- *          Tipo real provavelmente uint8_t promovido a int.
- *
- * TODO:
- *   - Confirmar se consulta g_Controllers[2] (scratchpad SPU/rumble)
- *     ou g_Controllers[canal físico do controle do jogador].
- *   - Verificar se retorna diretamente o byte do campo ou um bool.
  *
  * PORT NOTE (PC):
  *   Manter uma variável de estado local atualizada por SetRumble /
