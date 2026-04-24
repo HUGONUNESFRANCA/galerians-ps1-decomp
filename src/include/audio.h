@@ -30,7 +30,6 @@
  *   0x8017e040  ✅ Video_SetMode      (BIOS table C wrapper)
  *   0x8017e050  ✅ Audio_SetChannel   (BIOS table B wrapper)
  *   0x80183a00  ✅ SPU_SetVoiceField
- *   0x80187DF4  ✅ SPU_CoreDriver     (22 SPU regs + SpuSetVoiceAttr)
  *   0x80184898  🟡 SPU_SetVolume      (3 SPU refs)
  *   0x801834B4  🟡 SPU_SetADSR        (2 SPU refs)
  *   0x80177328  🟡 SPU_KeyOnOff       (4 SPU refs)
@@ -166,11 +165,6 @@ void Audio_SetChannel(int channel, int enable);
  * estado de voz mantida em RAM principal. */
 void SPU_SetVoiceField(void *voice_ptr, uint32_t data, uint32_t flag);
 
-/* 0x80187DF4 — ✅ SPU_CoreDriver(): driver central do SPU.
- * 22 acessos a registradores SPU + chamada a SpuSetVoiceAttr.
- * Provavelmente o tick por frame que reprograma todas as vozes ativas. */
-void SPU_CoreDriver(void);
-
 /* 0x80184898 — 🟡 SPU_SetVolume(): 3 acessos a registradores SPU.
  * Provavelmente ajusta volume master ou per-voice. Assinatura exata
  * a confirmar. */
@@ -213,9 +207,9 @@ int GetRumbleState(int channel);
  *  Video_SetMode     → desnecessário no port; substituído pelo decoder
  *      de FMV do PC (avcodec). Manter como no-op.
  *
- *  SPU_CoreDriver    → OpenAL alGenSources + alSourcei por voz:
+ *  SPU voices        → OpenAL alGenSources + alSourcei por voz:
  *      alGenSources(SPU_VOICE_COUNT, al_sources);
- *      O tick por frame reprograma pitch/volume/loop de cada source.
+ *      Um tick por frame reprograma pitch/volume/loop de cada source.
  *
  *  SPU_KeyOnOff      → alSourcePlay / alSourceStop (por bit de máscara).
  *
@@ -226,7 +220,7 @@ int GetRumbleState(int channel);
  *      pré-renderizar a curva no buffer PCM se a voz não muda de ADSR.
  *
  *  SPU_SetVoiceField → escrever no shadow state em RAM; o tick do
- *      SPU_CoreDriver propaga para a source OpenAL no próximo frame.
+ *      SPU propaga para a source OpenAL no próximo frame.
  *
  *  g_FrameCounter    → PC frame counter via QueryPerformanceCounter
  *      (ou std::chrono::steady_clock no C++). Atualizar por VSync do PC.

@@ -24,11 +24,14 @@
  *   0x8017e050  Audio_SetChannel ✅  (BIOS table B @ 0x000000B0)
  *
  * SPU Core:
- *   0x80187DF4  SPU_CoreDriver     ✅  22 acessos SPU + SpuSetVoiceAttr
  *   0x80183a00  SPU_SetVoiceField  ✅  escreve voice+0x28 e voice+0x34
  *   0x80184898  SPU_SetVolume      🟡  3 SPU refs
  *   0x801834B4  SPU_SetADSR        🟡  2 SPU refs
  *   0x80177328  SPU_KeyOnOff       🟡  4 SPU refs
+ *
+ * Nota: 0x80187DF4 foi inicialmente rotulado aqui como SPU_CoreDriver
+ * (por contagem de acessos a registradores SPU). Mapeamento posterior
+ * mostrou que é na verdade Engine_Init — ver engine_state.h / MemoryMap.md.
  *
  * Debug:
  *   0x8017d558  Debug_Print        ✅  ("VSync: timeout")
@@ -118,12 +121,12 @@ void Audio_SetChannel(int channel, int enable)
  *
  * Os offsets (0x28 / 0x34) estão muito além do stride de 0x10 dos
  * registradores SPU de hardware — então voice_ptr aponta para uma
- * struct shadow em RAM, não para o hardware. O SPU_CoreDriver
- * (0x80187DF4) provavelmente consome esse shadow a cada tick.
+ * struct shadow em RAM, não para o hardware. O tick do SPU consome
+ * esse shadow a cada frame.
  *
  * PORT NOTE (PC):
  *   Manter o shadow state como struct C; o equivalente OpenAL é
- *   aplicado em SPU_CoreDriver, não aqui.
+ *   aplicado no tick do SPU, não aqui.
  * ─────────────────────────────────────────────────────────────── */
 void SPU_SetVoiceField(void *voice_ptr, uint32_t data, uint32_t flag)
 {
@@ -131,28 +134,6 @@ void SPU_SetVoiceField(void *voice_ptr, uint32_t data, uint32_t flag)
     (void)voice_ptr;
     (void)data;
     (void)flag;
-}
-
-
-/* ────────────────────────────────────────────────────────────────
- * SPU_CoreDriver — 0x80187DF4  ✅ Confirmado
- *
- * Driver central do SPU. Faz 22 acessos a registradores SPU e chama
- * SpuSetVoiceAttr (libsnd do PsyQ). Provavelmente o tick por frame
- * que reprograma todas as vozes ativas com base no shadow state.
- *
- * PORT NOTE (PC):
- *   O equivalente é o tick que percorre as 24 sources OpenAL e
- *   aplica pitch/volume/loop a cada frame:
- *       for (int v = 0; v < SPU_VOICE_COUNT; v++) {
- *           alSourcef(al_sources[v], AL_PITCH, voice[v].pitch / 4096.f);
- *           alSourcef(al_sources[v], AL_GAIN,  voice[v].vol_left / 32767.f);
- *           ...
- *       }
- * ─────────────────────────────────────────────────────────────── */
-void SPU_CoreDriver(void)
-{
-    /* TODO: reconstrução pendente. */
 }
 
 

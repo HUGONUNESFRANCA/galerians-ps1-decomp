@@ -64,4 +64,39 @@ typedef struct {
 /* 0x80185f68  Channel_InitType7(data, entry) — vídeo/CD-DA                 */
 /* 0x8018635c  Channel_Register(index, entry) — registro comum              */
 
+/* ─────────────────────────────────────────────────────────
+ * Engine_Init — 0x80187DF4  ✅ Confirmado
+ *
+ * Ponto de entrada da engine inteira. Responsabilidades:
+ *   1. Zera o scratchpad (0x1F800000, 0x2A0 bytes) — ver scratchpad.h
+ *   2. Mapeia todos os subsistemas (engine state, câmera, SPU)
+ *      preenchendo ponteiros para blocos dentro do scratchpad.
+ *   3. Configura o renderer:
+ *        Video_SetResolution(g_ScreenWidth/2, g_ScreenHeight/2)  [0x8018c008]
+ *        Display_Enable(1)                                        [0x80178c84]
+ *        SetDrawEnv(...)                                          [0x80178ea0]
+ *   4. Obtém os bancos de voz do SPU via SPU_GetChannelBank
+ *      (A = 0x801E2380 voices 0-15, B = 0x801E2470 voices 16-23).
+ *   5. Chama FUN_80187420/FUN_80187450 com ponteiros para o
+ *      scratchpad — provavelmente setup de SPU DMA / buffers.
+ *   6. Dispara o primeiro VSync via Frame_First (0x8018669C).
+ *
+ * Observação histórica: este endereço foi inicialmente rotulado como
+ * SPU_CoreDriver por causa dos 22 acessos a registradores SPU; o
+ * mapeamento posterior revelou que os acessos são na inicialização
+ * em bloco da SPU durante o boot, não num driver por frame.
+ *
+ * PORT NOTE (PC):
+ *   Engine_Init é o entry point do port. Substituições:
+ *     - scratchpad zeroing   → malloc(ScratchpadLayout) + memset(0)
+ *     - Video_SetResolution  → SDL_CreateWindow / glViewport
+ *     - Display_Enable       → SwapBuffers / SDL_ShowWindow
+ *     - SetDrawEnv           → glClearColor / FBO setup
+ *     - VSync                → timer de QueryPerformanceCounter
+ *     - SPU channel banks    → alGenSources(24)
+ *   O layout do scratchpad mapeia 1:1 para ScratchpadLayout em
+ *   include/scratchpad.h — não existe indireção a manter.
+ * ───────────────────────────────────────────────────────── */
+/* void Engine_Init(void);  — stub em src/ a criar quando o dump for feito */
+
 #endif /* ENGINE_STATE_H */

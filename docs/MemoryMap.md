@@ -13,9 +13,22 @@
 MAPA DE MEMÓRIA GLOBAL
 ──────────────────────────────────────────────────────────────
 0x80000000  BIOS / vetores de exceção
+0x000000B0  BIOS Table B           (usado por Audio_SetChannel via t1)
+0x000000C0  BIOS Table C           (usado por Video_SetMode via t1)
+0x1F800000  Scratchpad base        (1 KB; 0x2A0 usado — ver scratchpad.h)
+0x1F8001A8  Scratchpad: SPU buffer (DAT_801eb55c)
+0x1F8001C8  Scratchpad: SPU DMA    (DAT_801eb558)
+0x1F8001E8  Scratchpad: SPU buffer (DAT_801eb554)
+0x1F800208  Scratchpad: SPU DMA    (DAT_801e2588)
 0x80010000  Código do jogo (SLUS_010.99)
+0x8011A14C  s_ModelCDB             ("MODEL.CDB")
+0x8011A158  s_ModuleBin            ("MODULE.BIN")
 0x8011a494  OT_TERMINATOR = 0xFFFFFFFC
 0x8011b958  String PsyQ "$Id: sys.c,v_1.140 1998/01/12"
+0x80193E30  g_ScreenWidth          (halved para Video_SetResolution)
+0x80193E34  g_ScreenHeight
+0x801E2380  g_SPUChannelBankA      (SPU voices 0-15)
+0x801E2470  g_SPUChannelBankB      (SPU voices 16-23)
 0x80193358  Ordering Table buffer 0 (renderer)
 0x80193888  Ordering Table buffer 1 (renderer)
 0x80194078  SPU_DMA_Table_A           (transfers para SPU RAM)
@@ -342,6 +355,87 @@ typedef struct {
 
 ---
 
+## 🧠 Engine Boot — Engine_Init
+
+`Engine_Init` (`0x80187DF4`) é o ponto de entrada da engine inteira.
+Inicialmente rotulado como `SPU_CoreDriver` por causa dos 22 acessos a
+registradores SPU, mas o mapeamento completo mostrou que:
+
+1. **Zera o scratchpad** (`0x1F800000`, `0x2A0` bytes em uso).
+2. **Mapeia os subsistemas** preenchendo ponteiros (engine state,
+   câmera, SPU) para blocos dentro do scratchpad.
+3. **Configura o renderer**:
+   - `Video_SetResolution(g_ScreenWidth/2, g_ScreenHeight/2)`
+   - `Display_Enable(1)`
+   - `SetDrawEnv(...)`
+4. **Obtém os bancos de voz do SPU** via `SPU_GetChannelBank`:
+   - Bank A (`0x801E2380`) → voices 0-15
+   - Bank B (`0x801E2470`) → voices 16-23
+5. **Inicializa buffers SPU** — `FUN_80187420` e `FUN_80187450` são
+   chamados com ponteiros para dentro do scratchpad (DMA setup e
+   buffer init, respectivamente).
+6. **Dispara o primeiro VSync** via `Frame_First` (`0x8018669C`).
+
+### Funções do Boot
+
+| Endereço | Nome | Confiança | Descrição |
+|---|---|---|---|
+| `0x80187DF4` | `Engine_Init`          | ✅ | Zera scratchpad, mapeia globals, init renderer, primeiro VSync |
+| `0x8018c008` | `Video_SetResolution`  | ✅ | Chamado com `(g_ScreenWidth/2, g_ScreenHeight/2)` |
+| `0x80178c84` | `Display_Enable`       | ✅ | `Display_Enable(1)` habilita saída de vídeo |
+| `0x80178ea0` | `SetDrawEnv`           | ✅ | Configura drawing environment (OT, clip, bg color) |
+| `0x8018669C` | `Frame_First`          | ✅ | Primeiro frame após init |
+| `0x80186D38` | `SPU_GetChannelBank`   | ✅ | Retorna ptr para bank A (`0x801E2380`) ou B (`0x801E2470`) |
+| `0x80187420` | `FUN_80187420`         | 🟡 | Chamada com ponteiros do scratchpad (provável SPU DMA setup) |
+| `0x80187450` | `FUN_80187450`         | 🟡 | Chamada com ponteiros do scratchpad (provável SPU buffer init) |
+
+---
+
+## 📦 Scratchpad Layout
+
+**Endereço:** `0x1F800000`  
+**Tamanho:** 1 KB (0x400 bytes) — hardware  
+**Usado:** 0x2A0 bytes pelo jogo
+
+A scratchpad é 1 KB alocada no data cache do R3000A (~1 ciclo vs. ~4
+ciclos para main RAM). Toda a região é zerada por `Engine_Init` e
+depois preenchida com shadows dos subsistemas. Ver
+`src/include/scratchpad.h` para a struct C completa.
+
+```
+SCRATCHPAD (0x1F800000, 1KB total, 0x2A0 bytes used):
+ 0x1F800000  Camera history buffer (stride 0x20 per frame, ~10 frames)
+ 0x1F800144  DAT_801e2590 (unknown, 4 bytes)
+ 0x1F800148  g_EngineStatePtr target (shadow de DAT_801eb574, 0x20)
+ 0x1F800168  g_CameraBuffer / GTE camera active (DAT_801eb560, 0x20)
+ 0x1F800188  DAT_801eb56c (unknown, 0x20)
+ 0x1F8001A8  DAT_801eb55c → passado para FUN_80187450 (0x20)
+ 0x1F8001C8  DAT_801eb558 → passado para FUN_80187420 (0x20)
+ 0x1F8001E8  DAT_801eb554 → passado para FUN_80187450 (0x20)
+ 0x1F800208  DAT_801e2588 → passado para FUN_80187420 (0x20)
+ 0x1F800228  10 globals mapeados (propósito desconhecido) — até 0x1F80029C
+ 0x1F8002A0  unused (resto do KB)
+```
+
+### Ponteiros que apontam para dentro do scratchpad
+
+| Global (main RAM) | Scratchpad target | Via |
+|---|---|---|
+| `0x801eb560`  `g_CameraBuffer`    | `0x1F800168` | Camera_LoadToGTE |
+| `0x801eb574`  `g_EngineStatePtr`  | `0x1F800148` | Engine_Init      |
+| `0x801eb56c`  `DAT_801eb56c`      | `0x1F800188` | Engine_Init      |
+| `0x801eb55c`  `DAT_801eb55c`      | `0x1F8001A8` | FUN_80187450     |
+| `0x801eb558`  `DAT_801eb558`      | `0x1F8001C8` | FUN_80187420     |
+| `0x801eb554`  `DAT_801eb554`      | `0x1F8001E8` | FUN_80187450     |
+| `0x801e2588`  `DAT_801e2588`      | `0x1F800208` | FUN_80187420     |
+| `0x801e2590`  `DAT_801e2590`      | `0x1F800144` | Engine_Init      |
+
+**Port note:** A scratchpad não existe em hardware PC. Alocar como
+struct global estática (ou `malloc(ScratchpadLayout)`) e fazer os
+ponteiros `DAT_801eb*` / `DAT_801e2*` apontarem para campos da struct.
+
+---
+
 ## Audio System
 
 ### Architecture
@@ -383,7 +477,6 @@ desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
 | `0x8017e040` | `Video_SetMode`     | ✅ | BIOS table C wrapper (mode arg) |
 | `0x8017e050` | `Audio_SetChannel`  | ✅ | BIOS table B wrapper (channel, enable); channels 0=BGM, 1=SFX, 2=Voice, 3=FMV |
 | `0x80183A00` | `SPU_SetVoiceField` | ✅ | escreve `voice+0x28 = data`, `voice+0x34 = flag` (shadow state em RAM) |
-| `0x80187DF4` | `SPU_CoreDriver`    | ✅ | 22 acessos a registradores SPU + `SpuSetVoiceAttr` |
 | `0x80184898` | `SPU_SetVolume`     | 🟡 | 3 SPU refs |
 | `0x801834B4` | `SPU_SetADSR`       | 🟡 | 2 SPU refs |
 | `0x80177328` | `SPU_KeyOnOff`      | 🟡 | 4 SPU refs (provavelmente `SPU_KEY_ON/OFF`) |
@@ -424,7 +517,7 @@ meio de uma cutscene, respectivamente.
 |---------------------------------------|---------------|
 | `Audio_SetChannel`                    | `SDL_Mixer` channel enable/disable (`Mix_GroupChannel`/`Mix_HaltGroup`) |
 | `Video_SetMode`                       | no-op (decoder de FMV PC gerencia próprio estado) |
-| `SPU_CoreDriver`                      | OpenAL `alGenSources` + `alSourcei` por voz; tick por frame propaga shadow → source |
+| SPU voices shadow tick                | OpenAL `alGenSources` + `alSourcei` por voz; tick por frame propaga shadow → source |
 | `SPU_KeyOnOff`                        | `alSourcePlay` / `alSourceStop` por bit de máscara |
 | `SPU_SetVolume`                       | `alSourcef(src, AL_GAIN, vol)` |
 | `SPU_SetADSR`                         | ADSR em software (curva sobre `AL_GAIN` por frame) |
@@ -476,7 +569,13 @@ meio de uma cutscene, respectivamente.
 | `0x801AC830` | `g_AudioVtable` | `void*[7+]` | ✅ |
 | `0x80194078` | `SPU_DMA_Table_A` | `uint32_t*` | 🟡 |
 | `0x80195FD0` | `SPU_DMA_Table_B` | `uint32_t*` | 🟡 |
-| `0x8011A174` | `g_SoundTables` | `void**[5]` | 🟡 |
+| `0x8011A174` | `g_SFXTable` | `void*[164]` | ✅ |
+| `0x801E2380` | `g_SPUChannelBankA` | `void**` | ✅ |
+| `0x801E2470` | `g_SPUChannelBankB` | `void**` | ✅ |
+| `0x8011A14C` | `s_ModelCDB` | `const char[]` | ✅ |
+| `0x8011A158` | `s_ModuleBin` | `const char[]` | ✅ |
+| `0x80193E30` | `g_ScreenWidth` | `int` | ✅ |
+| `0x80193E34` | `g_ScreenHeight` | `int` | ✅ |
 
 ---
 
