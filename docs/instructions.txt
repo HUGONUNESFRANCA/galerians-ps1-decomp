@@ -1,0 +1,48 @@
+update all audio and engine files with major findings:
+
+1. In docs/memory_map.md add new section "Scratchpad Layout":
+
+SCRATCHPAD (0x1F800000, 1KB total, 0x2A0 bytes used):
+- 0x1F800000  Camera history buffer (stride 0x20 per frame)
+- 0x1F800144  DAT_801e2590 (unknown)
+- 0x1F800148  g_EngineStatePtr target (DAT_801eb574)
+- 0x1F800168  g_CameraBuffer / GTE camera active (DAT_801eb560)
+- 0x1F800188  DAT_801eb56c (unknown)
+- 0x1F8001A8  DAT_801eb55c → passed to FUN_80187450
+- 0x1F8001C8  DAT_801eb558 → passed to FUN_80187420
+- 0x1F8001E8  DAT_801eb554 → passed to FUN_80187450
+- 0x1F800208  DAT_801e2588 → passed to FUN_80187420
+- 0x1F800228-0x1F80029C: 10 more mapped globals (unknown purpose)
+
+2. Rename FUN_80187df4 to Engine_Init in memory_map.md
+   It zeros scratchpad, maps all engine subsystems, 
+   sets up renderer, fires first VSync.
+
+3. Add new confirmed functions:
+- 0x80187df4  Engine_Init         confirmed - zeros scratchpad, maps all globals, init renderer
+- 0x8018c008  Video_SetResolution - called with (_DAT_80193e30/2, _DAT_80193e34/2)
+- 0x80178c84  Display_Enable(1)   - enables display output
+- 0x80178ea0  SetDrawEnv          - sets drawing environment
+- 0x8018669c  Frame_First         - first frame after init
+- 0x80186d38  SPU_GetChannelBank  - returns ptr to voice bank A(0x801e2380) or B(0x801e2470)
+- 0x80187420  FUN_80187420        - called with scratchpad ptrs, likely SPU DMA setup
+- 0x80187450  FUN_80187450        - called with scratchpad ptrs, likely SPU buffer init
+
+4. Add new confirmed globals:
+- 0x801E2380  g_SPUChannelBankA   void** - SPU voices 0-15
+- 0x801E2470  g_SPUChannelBankB   void** - SPU voices 16-23
+- 0x8011A174  g_SFXTable          ptr[]  - 164-entry SFX index table
+- 0x8011A14C  s_ModelCDB          string - "MODEL.CDB" asset filename
+- 0x8011A158  s_ModuleBin         string - "MODULE.BIN" asset filename
+- 0x80193E30  g_ScreenWidth       int    - native resolution X (halved for SetResolution)
+- 0x80193E34  g_ScreenHeight      int    - native resolution Y
+
+5. Add PORT NOTE in engine_state.h:
+Engine_Init (0x80187df4) is the entry point for the entire engine.
+For PC port: replace scratchpad allocation with malloc(),
+replace VSync with timer, replace renderer init with OpenGL/Vulkan init.
+The scratchpad layout maps directly to a C struct (ScratchpadLayout).
+
+6. Create include/scratchpad.h with the full scratchpad layout as a struct
+
+Then commit: "feat: discover Engine_Init - full scratchpad layout and SPU channel banks mapped"
