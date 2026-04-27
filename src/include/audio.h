@@ -101,6 +101,23 @@ typedef struct {
     uint16_t  repeat_addr; /* +0x0E: endereço de loop na SPU RAM >> 3 */
 } SpuVoiceRegs;  /* sizeof = 0x10 */
 
+/* ── SpuVoiceStruct — Estado de voz em RAM principal ──────────────
+ * Layout de 32 bytes mantido pelo driver SPU em RAM principal.
+ * Distinto de SpuVoiceRegs (registradores de hardware, 0x10 bytes).
+ * ─────────────────────────────────────────────────────────────── */
+typedef struct {
+    uint16_t vol_r_or_pitch_base; // +0x00 (default 0x1000)
+    uint16_t unknown_02;
+    uint16_t unknown_04;
+    uint16_t unknown_06;
+    uint16_t vol_l;               // +0x08 (default 0x1000)
+    uint16_t unknown_0A;
+    uint16_t unknown_0C;
+    uint16_t unknown_0E;
+    uint16_t pitch;               // +0x10 (4096 = 44100Hz)
+    uint8_t  cleared_pad[14];     // +0x12 to +0x1F (cleared)
+} SpuVoiceStruct; // 32 bytes
+
 /* ── Globais ───────────────────────────────────────────────────── */
 
 /* 0x80195C10 — g_FrameCounter: contador de frames incrementado a cada

@@ -365,15 +365,15 @@ registradores SPU, mas o mapeamento completo mostrou que:
 2. **Mapeia os subsistemas** preenchendo ponteiros (engine state,
    câmera, SPU) para blocos dentro do scratchpad.
 3. **Configura o renderer**:
-   - `Video_SetResolution(g_ScreenWidth/2, g_ScreenHeight/2)`
+   - `GTE_SetScreenCenter(g_ScreenWidth/2, g_ScreenHeight/2)`
    - `Display_Enable(1)`
    - `SetDrawEnv(...)`
 4. **Obtém os bancos de voz do SPU** via `SPU_GetChannelBank`:
    - Bank A (`0x801E2380`) → voices 0-15
    - Bank B (`0x801E2470`) → voices 16-23
-5. **Inicializa buffers SPU** — `FUN_80187420` e `FUN_80187450` são
-   chamados com ponteiros para dentro do scratchpad (DMA setup e
-   buffer init, respectivamente).
+5. **Inicializa voices/buffers SPU** — `SPU_VoiceInit` e `SPU_BufferClear`
+   são chamados com ponteiros para dentro do scratchpad (init de voice
+   defaults e zeragem de buffer/reverb, respectivamente).
 6. **Dispara o primeiro VSync** via `Frame_First` (`0x8018669C`).
 
 ### Funções do Boot
@@ -381,13 +381,13 @@ registradores SPU, mas o mapeamento completo mostrou que:
 | Endereço | Nome | Confiança | Descrição |
 |---|---|---|---|
 | `0x80187DF4` | `Engine_Init`          | ✅ | Zera scratchpad, mapeia globals, init renderer, primeiro VSync |
-| `0x8018c008` | `Video_SetResolution`  | ✅ | Chamado com `(g_ScreenWidth/2, g_ScreenHeight/2)` |
+| `0x8018c008` | `GTE_SetScreenCenter`  | ✅ | Escreve GTE control regs OFX (`0xC000`) e OFY (`0xC800`); chamado com `(g_ScreenWidth/2, g_ScreenHeight/2)`. **Chave para widescreen.** |
 | `0x80178c84` | `Display_Enable`       | ✅ | `Display_Enable(1)` habilita saída de vídeo |
 | `0x80178ea0` | `SetDrawEnv`           | ✅ | Configura drawing environment (OT, clip, bg color) |
 | `0x8018669C` | `Frame_First`          | ✅ | Primeiro frame após init |
 | `0x80186D38` | `SPU_GetChannelBank`   | ✅ | Retorna ptr para bank A (`0x801E2380`) ou B (`0x801E2470`) |
-| `0x80187420` | `FUN_80187420`         | 🟡 | Chamada com ponteiros do scratchpad (provável SPU DMA setup) |
-| `0x80187450` | `FUN_80187450`         | 🟡 | Chamada com ponteiros do scratchpad (provável SPU buffer init) |
+| `0x80187420` | `SPU_VoiceInit`        | ✅ | Zera 32 bytes do voice block; seta pitch e volume default = `0x1000` (44100 Hz). Chamada 2× em Engine_Init |
+| `0x80187450` | `SPU_BufferClear`      | ✅ | `memset(buffer, 0, 32)`. Usado para SPU output buffer / reverb |
 
 ---
 
@@ -409,10 +409,10 @@ SCRATCHPAD (0x1F800000, 1KB total, 0x2A0 bytes used):
  0x1F800148  g_EngineStatePtr target (shadow de DAT_801eb574, 0x20)
  0x1F800168  g_CameraBuffer / GTE camera active (DAT_801eb560, 0x20)
  0x1F800188  DAT_801eb56c (unknown, 0x20)
- 0x1F8001A8  DAT_801eb55c → passado para FUN_80187450 (0x20)
- 0x1F8001C8  DAT_801eb558 → passado para FUN_80187420 (0x20)
- 0x1F8001E8  DAT_801eb554 → passado para FUN_80187450 (0x20)
- 0x1F800208  DAT_801e2588 → passado para FUN_80187420 (0x20)
+ 0x1F8001A8  DAT_801eb55c → passado para SPU_BufferClear (0x20)
+ 0x1F8001C8  DAT_801eb558 → passado para SPU_VoiceInit  (0x20)
+ 0x1F8001E8  DAT_801eb554 → passado para SPU_BufferClear (0x20)
+ 0x1F800208  DAT_801e2588 → passado para SPU_VoiceInit  (0x20)
  0x1F800228  10 globals mapeados (propósito desconhecido) — até 0x1F80029C
  0x1F8002A0  unused (resto do KB)
 ```
@@ -424,10 +424,10 @@ SCRATCHPAD (0x1F800000, 1KB total, 0x2A0 bytes used):
 | `0x801eb560`  `g_CameraBuffer`    | `0x1F800168` | Camera_LoadToGTE |
 | `0x801eb574`  `g_EngineStatePtr`  | `0x1F800148` | Engine_Init      |
 | `0x801eb56c`  `DAT_801eb56c`      | `0x1F800188` | Engine_Init      |
-| `0x801eb55c`  `DAT_801eb55c`      | `0x1F8001A8` | FUN_80187450     |
-| `0x801eb558`  `DAT_801eb558`      | `0x1F8001C8` | FUN_80187420     |
-| `0x801eb554`  `DAT_801eb554`      | `0x1F8001E8` | FUN_80187450     |
-| `0x801e2588`  `DAT_801e2588`      | `0x1F800208` | FUN_80187420     |
+| `0x801eb55c`  `DAT_801eb55c`      | `0x1F8001A8` | SPU_BufferClear  |
+| `0x801eb558`  `DAT_801eb558`      | `0x1F8001C8` | SPU_VoiceInit    |
+| `0x801eb554`  `DAT_801eb554`      | `0x1F8001E8` | SPU_BufferClear  |
+| `0x801e2588`  `DAT_801e2588`      | `0x1F800208` | SPU_VoiceInit    |
 | `0x801e2590`  `DAT_801e2590`      | `0x1F800144` | Engine_Init      |
 
 **Port note:** A scratchpad não existe em hardware PC. Alocar como
@@ -477,6 +477,8 @@ desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
 | `0x8017e040` | `Video_SetMode`     | ✅ | BIOS table C wrapper (mode arg) |
 | `0x8017e050` | `Audio_SetChannel`  | ✅ | BIOS table B wrapper (channel, enable); channels 0=BGM, 1=SFX, 2=Voice, 3=FMV |
 | `0x80183A00` | `SPU_SetVoiceField` | ✅ | escreve `voice+0x28 = data`, `voice+0x34 = flag` (shadow state em RAM) |
+| `0x80187420` | `SPU_VoiceInit`     | ✅ | Zera 32 bytes do voice block; seta pitch+volume = `0x1000` (default 44100 Hz) |
+| `0x80187450` | `SPU_BufferClear`   | ✅ | `memset(buffer, 0, 32)` — limpa SPU output/reverb buffer |
 | `0x80184898` | `SPU_SetVolume`     | 🟡 | 3 SPU refs |
 | `0x801834B4` | `SPU_SetADSR`       | 🟡 | 2 SPU refs |
 | `0x80177328` | `SPU_KeyOnOff`      | 🟡 | 4 SPU refs (provavelmente `SPU_KEY_ON/OFF`) |
@@ -696,7 +698,7 @@ Formatos de Textura:
 - [ ] FPS desbloqueado (separar update/render com acumulador)
 - [ ] Resolução aumentada (framebuffer escalado)
 - [ ] Texturas HD (upscaling xBRZ ou texture packs)
-- [ ] Widescreen (ajuste de FOV horizontal)
+- [ ] Widescreen (ajuste de FOV horizontal — via `GTE_SetScreenCenter` @ `0x8018c008`, OFX/OFY)
 - [ ] Freecam (interceptar writes na struct de câmera)
 
 ---

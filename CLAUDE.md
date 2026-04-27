@@ -27,3 +27,6 @@ CPU: MIPS R3000A, Little Endian.
 - Localizar sistema de câmera
 - Mapear gap da EngineState (0x801ACB66 – 0x801AE158)
 - Identificar slot de gameplay na state machine
+- Check values at 0x80193E30 and 0x80193E34 in DuckStation to confirm native resolution (expected: 320 and 240).
+- Analyze FUN_8018669c (Frame_First) - last unknown in Engine_Init.
+- Analyze 0x8011A174 XREFs to find Sound Manager.
