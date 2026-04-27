@@ -37,7 +37,8 @@ MAPA DE MEMÓRIA GLOBAL
 0x80195bd8  g_AudioStateMask (ptr)
 0x80195C10  g_FrameCounter            (uint32_t, ++ a cada VBlank)
 0x80195FD0  SPU_DMA_Table_B
-0x8011A174  Sound tables base         (5 arrays: 164/111/102/100/92 ptrs)
+0x8011A164  Sound tables base         (lido por Sound_Manager @ 0x8011d198)
+0x8011A174  g_SFXTable                (164-entry SFX index)
 0x8011B07C  Sound tables end
 0x801AC830  g_AudioVtable             (void*[7+], dispatch de áudio)
 0x801AC8D0  g_ControllerFlags[16]
@@ -381,7 +382,7 @@ registradores SPU, mas o mapeamento completo mostrou que:
 | Endereço | Nome | Confiança | Descrição |
 |---|---|---|---|
 | `0x80187DF4` | `Engine_Init`          | ✅ | Zera scratchpad, mapeia globals, init renderer, primeiro VSync |
-| `0x8018c008` | `GTE_SetScreenCenter`  | ✅ | Escreve GTE control regs OFX (`0xC000`) e OFY (`0xC800`); chamado com `(g_ScreenWidth/2, g_ScreenHeight/2)`. **Chave para widescreen.** |
+| `0x8018c008` | `GTE_SetScreenCenter`  | ✅ | Escreve GTE control regs OFX (`0xC000`) e OFY (`0xC800`) com os argumentos deslocados `<< 16` (formato fixo Q15.16 do GTE; equivalente a `<< 0x10`). Chamado com `(g_ScreenWidth/2, g_ScreenHeight/2)`. **Chave para widescreen.** |
 | `0x80178c84` | `Display_Enable`       | ✅ | `Display_Enable(1)` habilita saída de vídeo |
 | `0x80178ea0` | `SetDrawEnv`           | ✅ | Configura drawing environment (OT, clip, bg color) |
 | `0x8018669C` | `Frame_First`          | ✅ | Primeiro frame após init |
@@ -479,6 +480,7 @@ desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
 | `0x80183A00` | `SPU_SetVoiceField` | ✅ | escreve `voice+0x28 = data`, `voice+0x34 = flag` (shadow state em RAM) |
 | `0x80187420` | `SPU_VoiceInit`     | ✅ | Zera 32 bytes do voice block; seta pitch+volume = `0x1000` (default 44100 Hz) |
 | `0x80187450` | `SPU_BufferClear`   | ✅ | `memset(buffer, 0, 32)` — limpa SPU output/reverb buffer |
+| `0x8011d198` | `Sound_Manager`     | ✅ | **Carregador central de assets de áudio.** Lê todas as sound tables a partir de `0x8011A164`. Offset interno de leitura em `0x8011d208`. |
 | `0x80184898` | `SPU_SetVolume`     | 🟡 | 3 SPU refs |
 | `0x801834B4` | `SPU_SetADSR`       | 🟡 | 2 SPU refs |
 | `0x80177328` | `SPU_KeyOnOff`      | 🟡 | 4 SPU refs (provavelmente `SPU_KEY_ON/OFF`) |
@@ -495,23 +497,44 @@ desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
 - ADPCM compression: 4-bit, 28 samples per block
 - DMA tables (transfers para SPU RAM): `0x80194078` e `0x80195FD0`
 
-### Sound Tables — `0x8011A174` – `0x8011B07C`
+### Sound Tables — `0x8011A164` – `0x8011B07C`
+
+**Base:** `0x8011A164` (lida por `Sound_Manager` @ `0x8011d198`).
+**SFX index (164 entradas):** `0x8011A174`.
 
 5 arrays de ponteiros consecutivos. Layout em ordem de endereço:
 
-| Index | Entries |
-|-------|---------|
-| 0     | 164     |
-| 1     | 111     |
-| 2     | 102     |
-| 3     | 100     |
-| 4     | 92      |
+| Index | Entries | Address      |
+|-------|---------|--------------|
+| 0     | 164     | `0x8011A174` |
+| 1     | 111     | (a confirmar)|
+| 2     | 102     | (a confirmar)|
+| 3     | 100     | (a confirmar)|
+| 4     | 92      | (a confirmar)|
 
 Total ≈ 569 entradas. Candidatos fortes a tabelas de índice de SFX e
 BGM. A divisão exata por canal lógico (BGM/SFX/Voice) ainda precisa ser
 confirmada via XREFs no Ghidra. VAG headers e XA markers não estão
 presentes no dump de main-RAM — requerem dump de SPU RAM e captura no
 meio de uma cutscene, respectivamente.
+
+#### Sound Table Entry — 16 bytes
+
+```c
+typedef struct {
+    void     *audio_data;     // +0x00 ponteiro para VAG (sample data)
+    uint32_t  vol_params;     // +0x04 volume / params (observado: 0x7C)
+    uint32_t  loop_data;      // +0x08 dados de loop
+    uint32_t  flags;          // +0x0C flags
+} SoundTableEntry;            // sizeof = 0x10
+```
+
+#### Assets Referenciados
+
+| Endereço | Símbolo | Conteúdo |
+|----------|---------|----------|
+| `0x8011A14C` | `s_ModelCDB`  | `"MODEL.CDB"`  — arquivo de modelos |
+| `0x8011A158` | `s_ModuleBin` | `"MODULE.BIN"` — bundle de módulos |
 
 ### Port Replacement Plan
 

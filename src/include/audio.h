@@ -118,6 +118,18 @@ typedef struct {
     uint8_t  cleared_pad[14];     // +0x12 to +0x1F (cleared)
 } SpuVoiceStruct; // 32 bytes
 
+/* ── SoundTableEntry — Entrada das tabelas de som ─────────────────
+ * Layout de 16 bytes apontado pelas tabelas em 0x8011A164 / 0x8011A174.
+ * Cada entrada referencia um asset de áudio carregado na SPU RAM,
+ * mais parâmetros associados (volume, loop, flags).
+ * ─────────────────────────────────────────────────────────────── */
+typedef struct {
+    void *audio_data;     /* +0x00 ptr para audio data (VAG na SPU RAM) */
+    void *volume_params;  /* +0x04 ptr para volume/params (e.g. 0x7C) */
+    void *loop_data;      /* +0x08 ptr para loop/dados adicionais */
+    void *flags;          /* +0x0C ptr para flags ou parâmetros extras */
+} SoundTableEntry;  /* sizeof = 0x10 */
+
 /* ── Globais ───────────────────────────────────────────────────── */
 
 /* 0x80195C10 — g_FrameCounter: contador de frames incrementado a cada
@@ -156,6 +168,12 @@ typedef struct {
 #define SOUND_TABLE_3_ENTRIES 100
 #define SOUND_TABLE_4_ENTRIES  92
 
+/* Ponteiros globais para as tabelas de som. g_SoundTableBase aponta
+ * para o início do bloco de 5 tabelas (0x8011A164); g_SFXTable é a
+ * primeira tabela utilizável (0x8011A174, 164 entradas). */
+extern SoundTableEntry *g_SoundTableBase;  /* 0x8011A164 */
+extern SoundTableEntry *g_SFXTable;        /* 0x8011A174 (164 entradas) */
+
 /* 0x801AC980 — g_Controllers[2]: terceiro canal do array de controle
  * (base 0x801AC900, stride 0x40). Usado como scratchpad para o pacote
  * de rumble enviado ao DualShock via SIO. Os campos relevantes são:
@@ -164,6 +182,11 @@ typedef struct {
 #define RUMBLE_SCRATCHPAD_ADDR  0x801AC980u
 
 /* ── Funções ───────────────────────────────────────────────────── */
+
+/* 0x8011d198 — SoundManager_Init(): central audio asset loader.
+ * Inicializa o sistema de som carregando as tabelas em 0x8011A164 /
+ * 0x8011A174 e configurando o estado base do driver SPU. */
+void SoundManager_Init(void);
 
 /* 0x8017e040 — ✅ Video_SetMode(mode): wrapper para a tabela C do BIOS
  * (0x000000C0). Carrega t1 com o índice da função BIOS desejada e salta.
