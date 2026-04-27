@@ -11,7 +11,20 @@
  *
  * PORT NOTE: For widescreen support, intercept the call to
  * GTE_SetScreenCenter and pass new center values calculated for the PC
- * viewport. */
+ * viewport.
+ *
+ * WIDESCREEN IMPLEMENTATION:
+ * - To enable widescreen: write new width to 0x80193E30 and height to
+ *   0x80193E34 before Engine_Init.
+ * - GTE_SetScreenCenter (0x8018c008) will auto-use these new values.
+ * - Common targets:
+ *     1280x720   -> OFX=640,  OFY=360
+ *     1920x1080  -> OFX=960,  OFY=540
+ *     2560x1440  -> OFX=1280, OFY=720
+ *     3840x2160  -> OFX=1920, OFY=1080
+ * - ASPECT RATIO NOTE: PS1 native is 4:3. Widescreen (16:9) will stretch
+ *   geometry natively. True widescreen requires adjusting the GTE projection
+ *   distance register (H) at COP2 control reg 0xE800 to fix FOV. */
 void GTE_SetScreenCenter(int x, int y); // 0x8018c008
 
 #endif /* GTE_H */

@@ -652,6 +652,19 @@ StateSlot_Scheduler (0x80185170)
 
 ## 🖥️ Renderer — Pipeline PsyQ
 
+### Resolução Nativa (Confirmada)
+
+- `g_ScreenWidth`  (`0x80193E30`) = `0x140` (320 px)
+- `g_ScreenHeight` (`0x80193E34`) = `0x0F0` (240 px)
+- **Frame timing:** lógica do jogo a 30 FPS, saída de vídeo a 60 FPS.
+- **PORT NOTE (FPS Unlock):** desacoplar `update` (fixo a 30 Hz) do `render` (ilimitado) com interpolação entre estados.
+
+### Suporte a Widescreen (Confirmado)
+
+- Alterar valores em `0x80193E30` / `0x80193E34` **antes** de `Engine_Init`.
+- O centro de projeção do GTE é atualizado automaticamente via `GTE_SetScreenCenter`
+  (`0x8018c008`), que escreve OFX/OFY a partir de `g_ScreenWidth/2` e `g_ScreenHeight/2`.
+
 ```
 SDK: PsyQ v1.140 — Sony SCEE — 12 Janeiro 1998
 

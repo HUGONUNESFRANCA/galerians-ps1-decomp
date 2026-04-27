@@ -25,8 +25,8 @@ CPU: MIPS R3000A, Little Endian.
 
 ## Próximas Tarefas
 - Priority 1: Analyze FUN_8011d198 (Sound Manager) - paste pseudo-C
-- Priority 2: Check 0x80193E30 in DuckStation to confirm 320x240 resolution
-- Priority 3: Analyze FUN_8018669c (Frame_First after Engine_Init)
+- Priority 2: Analyze FUN_8018669c (Frame_First after Engine_Init)
+- Priority: Implement GTE_H (COP2 0xE800) adjustment for true widescreen FOV to prevent 16:9 stretching.
 - Localizar sistema de câmera
 - Mapear gap da EngineState (0x801ACB66 – 0x801AE158)
 - Identificar slot de gameplay na state machine
