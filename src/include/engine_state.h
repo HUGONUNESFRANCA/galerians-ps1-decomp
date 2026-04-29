@@ -65,6 +65,14 @@ typedef struct {
 /* 0x8018635c  Channel_Register(index, entry) — registro comum              */
 
 /* ─────────────────────────────────────────────────────────
+ * Globais de CD / disco / módulo
+ * ───────────────────────────────────────────────────────── */
+extern uint32_t g_CDDriveReady;     /* 0x80193e00 */
+extern uint32_t g_CDLoadReady;      /* 0x80193e04 */
+extern uint32_t g_DiscVersion;      /* 0x80193e08 — 0=disc1, non-0=disc2  */
+extern void    *g_ModuleBase;       /* 0x801AD140 — MODULE.BIN load addr  */
+
+/* ─────────────────────────────────────────────────────────
  * Engine_Init — 0x80187DF4  ✅ Confirmado
  *
  * Ponto de entrada da engine inteira. Responsabilidades:

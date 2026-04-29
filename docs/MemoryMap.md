@@ -557,6 +557,36 @@ typedef struct {
 
 ---
 
+## 💾 Asset Loading
+
+### Confirmed Functions
+
+| Address      | Name             | Confiança | Description |
+|--------------|------------------|:---------:|-------------|
+| `0x8018e2c4` | `CD_LoadFile`    | ✅ | Carrega arquivo do CD para RAM |
+| `0x80165528` | `CD_FinishLoad`  | ✅ | Finaliza/aguarda conclusão do load do CD |
+
+### Fixed Load Addresses
+
+| Address      | Asset        | Notes |
+|--------------|--------------|-------|
+| `0x801AD140` | `MODULE.BIN` | Endereço fixo de carregamento do bundle de módulos |
+
+### Load Tables
+
+| Symbol             | Address      | Entries | Description |
+|--------------------|--------------|:-------:|-------------|
+| `PTR_DAT_80190e0c` | `0x80190e0c` | 10      | Load Table A — 10 arquivos |
+| `PTR_DAT_80190e5c` | `0x80190e5c` | 7       | Load Table B — 7 arquivos |
+
+### Disc / Version Flag
+
+| Address      | Symbol         | Description |
+|--------------|----------------|-------------|
+| `0x80193e08` | `DAT_80193e08` | Flag de disco/versão (controla qual tabela/disco é usado no load) |
+
+---
+
 ## 📊 Variáveis Globais Confirmadas
 
 | Endereço | Nome | Tipo | Confiança |

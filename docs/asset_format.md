@@ -1,5 +1,3 @@
-Create a new file docs/asset_format.md with the exact following content. Do not read any other files.
-
 # Galerians PS1 — Asset Format Documentation
 
 ## CD Filesystem (ISO9660, 216MB total)
