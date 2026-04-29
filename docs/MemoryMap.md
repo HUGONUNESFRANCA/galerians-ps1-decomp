@@ -23,6 +23,8 @@ MAPA DE MEMÓRIA GLOBAL
 0x80010000  Código do jogo (SLUS_010.99)
 0x8011A14C  s_ModelCDB             ("MODEL.CDB")
 0x8011A158  s_ModuleBin            ("MODULE.BIN")
+0x8011c0dc  g_CDConfig             (CD driver config block)
+0x8011c0e4  g_CDDefaultPath        (default CD path string)
 0x8011a494  OT_TERMINATOR = 0xFFFFFFFC
 0x8011b958  String PsyQ "$Id: sys.c,v_1.140 1998/01/12"
 0x80193E30  g_ScreenWidth          (halved para Video_SetResolution)
@@ -31,6 +33,8 @@ MAPA DE MEMÓRIA GLOBAL
 0x801E2470  g_SPUChannelBankB      (SPU voices 16-23)
 0x80193358  Ordering Table buffer 0 (renderer)
 0x80193888  Ordering Table buffer 1 (renderer)
+0x80190e0c  g_FileTableA              (10 × {dest,name} - Disc 1)
+0x80190e5c  g_FileTableB              (7 × {dest,name} - Disc 2)
 0x80194078  SPU_DMA_Table_A           (transfers para SPU RAM)
 0x80194b48  g_StateChannelFlags
 0x80194b4c  g_StateChannelTable
@@ -41,6 +45,12 @@ MAPA DE MEMÓRIA GLOBAL
 0x8011A174  g_SFXTable                (164-entry SFX index)
 0x8011B07C  Sound tables end
 0x801AC830  g_AudioVtable             (void*[7+], dispatch de áudio)
+0x801ACEA8  g_SoundCDB_Base           (SOUND.CDB RAM base)
+0x801ACF60  g_MenuCDB_Base            (MENU.CDB RAM base)
+0x801ACFD8  g_ItemTimCDB_Base         (ITEMTIM.CDB RAM base)
+0x801AD050  g_ModelCDB_Base           (MODEL.CDB RAM base)
+0x801AD0C8  g_DisplayCDB_Base         (DISPLAY.CDB RAM base)
+0x801AD140  MODULE.BIN load address   (overlay code base)
 0x801AC8D0  g_ControllerFlags[16]
 0x801AC8D8  EngineState — INÍCIO REAL DA STRUCT
 0x801AC900  EngineState.channel_table[0]  ← g_EngineBase aponta aqui (+0x28)
@@ -561,23 +571,43 @@ typedef struct {
 
 ### Confirmed Functions
 
-| Address      | Name             | Confiança | Description |
-|--------------|------------------|:---------:|-------------|
-| `0x8018e2c4` | `CD_LoadFile`    | ✅ | Carrega arquivo do CD para RAM |
-| `0x80165528` | `CD_FinishLoad`  | ✅ | Finaliza/aguarda conclusão do load do CD |
+| Address      | Name                 | Confiança | Description |
+|--------------|----------------------|:---------:|-------------|
+| `0x8018e2c4` | `CD_LoadFile`        | ✅ | `CD_LoadFile(handle, filename)` — pipeline completo de leitura do CD |
+| `0x8018f254` | `CD_CheckReady`      | ✅ | Retorna 0 se o drive ainda está ocupado |
+| `0x80185a7c` | `CD_Yield`           | ✅ | Scheduler yield — chamado em loop enquanto aguarda o drive |
+| `0x8017d590` | `CD_SetFilename`     | ✅ | `CD_SetFilename(desc, name)` — preenche file descriptor |
+| `0x8017d5c0` | `CD_CopyDesc`        | ✅ | `CD_CopyDesc(dest, src)` — copia file descriptor |
+| `0x8018e12c` | `CD_Open`            | ✅ | `CD_Open(handle)` — abre handle de arquivo |
+| `0x8018e1f4` | `CD_GetSize`         | ✅ | `CD_GetSize(handle, sectors, mode)` — retorna sector_count e compression_flag |
+| `0x801855b4` | `malloc`             | ✅ | Alocador interno (PsyQ malloc) |
+| `0x8018e234` | `CD_Read`            | ✅ | `CD_Read(handle, buf, sectors, size)` — lê e descomprime |
+| `0x80165528` | `CD_FinishLoad`      | ✅ | Finaliza/aguarda conclusão do load do CD |
 
 ### Fixed Load Addresses
 
 | Address      | Asset        | Notes |
 |--------------|--------------|-------|
-| `0x801AD140` | `MODULE.BIN` | Endereço fixo de carregamento do bundle de módulos |
+| `0x801AD140` | `MODULE.BIN` | Endereço fixo de carregamento do bundle de módulos (2.4 MB overlay code) |
+| `0x801AD050` | `MODEL.CDB`  | RAM base — 3D models (~4.8 MB) |
+| `0x801AD0C8` | `DISPLAY.CDB`| RAM base — UI textures (~2.5 MB) |
+| `0x801ACEA8` | `SOUND.CDB`  | RAM base — audio data (~15.9 MB) |
+| `0x801ACFD8` | `ITEMTIM.CDB`| RAM base — item textures (~14.5 MB) |
+| `0x801ACF60` | `MENU.CDB`   | RAM base — menu textures (~2.6 MB) |
 
 ### Load Tables
 
 | Symbol             | Address      | Entries | Description |
 |--------------------|--------------|:-------:|-------------|
-| `PTR_DAT_80190e0c` | `0x80190e0c` | 10      | Load Table A — 10 arquivos |
-| `PTR_DAT_80190e5c` | `0x80190e5c` | 7       | Load Table B — 7 arquivos |
+| `g_FileTableA`     | `0x80190e0c` | 10      | Load Table A — 10 `{dest,name}` pairs (Disc 1) |
+| `g_FileTableB`     | `0x80190e5c` | 7       | Load Table B — 7 `{dest,name}` pairs (Disc 2) |
+
+### CD Driver Globals
+
+| Address      | Symbol            | Description |
+|--------------|-------------------|-------------|
+| `0x8011c0dc` | `g_CDConfig`      | CD driver config block |
+| `0x8011c0e4` | `g_CDDefaultPath` | Default CD path string |
 
 ### Disc / Version Flag
 
@@ -631,6 +661,15 @@ typedef struct {
 | `0x8011A158` | `s_ModuleBin` | `const char[]` | ✅ |
 | `0x80193E30` | `g_ScreenWidth` | `int` | ✅ |
 | `0x80193E34` | `g_ScreenHeight` | `int` | ✅ |
+| `0x801AD050` | `g_ModelCDB_Base` | `void*` | ✅ |
+| `0x801AD0C8` | `g_DisplayCDB_Base` | `void*` | ✅ |
+| `0x801ACEA8` | `g_SoundCDB_Base` | `void*` | ✅ |
+| `0x801ACFD8` | `g_ItemTimCDB_Base` | `void*` | ✅ |
+| `0x801ACF60` | `g_MenuCDB_Base` | `void*` | ✅ |
+| `0x80190e0c` | `g_FileTableA` | `pair[10]` `{dest,name}` | ✅ |
+| `0x80190e5c` | `g_FileTableB` | `pair[7]` `{dest,name}` | ✅ |
+| `0x8011c0dc` | `g_CDConfig` | CD driver config block | ✅ |
+| `0x8011c0e4` | `g_CDDefaultPath` | `char*` | ✅ |
 
 ---
 

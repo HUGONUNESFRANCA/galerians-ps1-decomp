@@ -35,5 +35,36 @@ Function: AssetLoader_Init (0x8011ce48)
 ## MODULE.BIN Format
 - Code overlay system loaded to fixed address 0x801AD140. Each area/room has its own code module.
 
+## MODULE.BIN Header Format
+
+| Offset | Size | Value              | Description                          |
+|--------|------|--------------------|--------------------------------------|
+| 0x00   | 4    | `0x00000001`       | Version/type = 1                     |
+| 0x04   | 16   | `"\T4\MODULE.BIN;1"` | ISO9660 full path (null terminated) |
+| 0x14   | N    | `0x00...`          | Zero padding then overlay code       |
+
+ISO9660 path structure: `\T4\` = track 4 (data track), `;1` = version.
+
+## CDB Compression Detection
+
+`CD_GetSize` returns two values:
+- `sector_count`: number of CD sectors
+- `compression_flag`: `0` = raw/uncompressed, non-zero = LZSS compressed
+
+Buffer sizing:
+- Uncompressed: `sector_count * 4 + 4` bytes
+- Compressed:   `sector_count * 8 + 8` bytes (2× workspace for decompression)
+
+## RAM Destination Map (Table A — Disc 1)
+
+| File         | RAM Address  | Size estimate           |
+|--------------|--------------|-------------------------|
+| MODULE.BIN   | `0x801AD140` | 2.4 MB overlay code     |
+| MODEL.CDB    | `0x801AD050` | 4.8 MB 3D models        |
+| DISPLAY.CDB  | `0x801AD0C8` | 2.5 MB UI textures      |
+| SOUND.CDB    | `0x801ACEA8` | 15.9 MB audio data      |
+| ITEMTIM.CDB  | `0x801ACFD8` | 14.5 MB item textures   |
+| MENU.CDB     | `0x801ACF60` | 2.6 MB menu textures    |
+
 ## XA.MXA Format
 - XA audio interleaved with data. Streams directly from CD for cutscenes/ambient.
