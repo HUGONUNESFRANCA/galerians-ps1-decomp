@@ -579,9 +579,10 @@ typedef struct {
 | `0x8017d590` | `CD_SetFilename`     | ✅ | `CD_SetFilename(desc, name)` — preenche file descriptor |
 | `0x8017d5c0` | `CD_CopyDesc`        | ✅ | `CD_CopyDesc(dest, src)` — copia file descriptor |
 | `0x8018e12c` | `CD_Open`            | ✅ | `CD_Open(handle)` — abre handle de arquivo |
-| `0x8018e1f4` | `CD_GetSize`         | ✅ | `CD_GetSize(handle, sectors, mode)` — retorna sector_count e compression_flag |
+| `0x8018e1f4` | `CD_GetNextSector`   | ✅ | `CD_GetNextSector(handle, sectors, 1)` — avança para o próximo setor |
 | `0x801855b4` | `malloc`             | ✅ | Alocador interno (PsyQ malloc) |
-| `0x8018e234` | `CD_Read`            | ✅ | `CD_Read(handle, buf, sectors, size)` — lê e descomprime |
+| `0x8018e234` | `CD_Read`            | ✅ | `CD_Read(handle, buf, sectors, size)` — lê em chunks de `0x800` bytes |
+| `0x8018ea20` | `CD_ReadSector`      | ✅ | `CD_ReadSector(sectors, buf, size)` — leitor de setor raw |
 | `0x80165528` | `CD_FinishLoad`      | ✅ | Finaliza/aguarda conclusão do load do CD |
 
 ### Fixed Load Addresses

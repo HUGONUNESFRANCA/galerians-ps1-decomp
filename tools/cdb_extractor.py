@@ -2,20 +2,29 @@
 """
 cdb_extractor.py — Galerians PS1 .CDB container extractor.
 
-Reads a .CDB file, detects compression via the CD_GetSize-style header,
-optionally LZSS-decompresses the body (PS1 LZSS variant), enumerates
-sub-files, and writes them to an output directory.
+Reads a .CDB file, parses the confirmed header layout, LZSS-decompresses
+the payload (PS1 LZSS variant), enumerates sub-files via the embedded
+sub-file table (and/or magic-byte scanning), and writes them out.
 
 Usage:
     python tools/cdb_extractor.py MODEL.CDB ./extracted/
+    python tools/cdb_extractor.py --subfile-count 1050 MODEL.CDB ./extracted/
 
-Header layout (mirrors what CD_GetSize @ 0x8018e1f4 returns):
-    +0x00  uint32_t  sector_count        number of CD sectors of payload
-    +0x04  uint32_t  compression_flag    0 = raw, non-zero = LZSS
+CDB Header (CONFIRMED):
+    +0x00  uint32  file_size            Total compressed file size
+    +0x04  uint16  sector_count         CD sectors (108 for MODEL.CDB)
+    +0x06  uint16  compression_flags    Low byte: 1=LZSS, High byte: variant/meta
+    +0x08  uint32  decompressed_size    Target size after LZSS expand
+    +0x0C  N       sub_file_table       Array of {offset, size} pairs
+                                        (1050 entries for MODEL.CDB)
 
-Buffer sizing follows the PS1 driver:
-    Uncompressed: sector_count * 4 + 4 bytes
-    Compressed  : sector_count * 8 + 8 bytes (2x workspace)
+Notes:
+- compression_flags is masked with 0xFFFF when checking for LZSS — the upper
+  bits (e.g. 0x0013 = 19 in MODEL.CDB) appear to encode a variant or meta
+  field (possibly sub-file count table size). Do NOT use sector_count to
+  size the decompression buffer in this variant — use decompressed_size.
+- MODEL.CDB stats: 4.6MB compressed → 14MB decompressed (≈3× ratio),
+  1050 sub-files (TIM textures + TMD models).
 
 LZSS PS1 variant parameters:
     window size  : 0x1000 (4096 bytes)
@@ -38,20 +47,29 @@ LZSS_WINDOW_SIZE = 0x1000  # 4096
 LZSS_LOOKAHEAD = 0x12      # 18
 LZSS_THRESHOLD = 3         # min match length encoded as (len - 3)
 
+HEADER_SIZE = 0x0C         # file_size + sector_count + comp_flags + decompressed_size
+SUBFILE_ENTRY_SIZE = 8     # {uint32 offset, uint32 size}
 
-def read_header(data: bytes) -> tuple[int, int]:
-    """Return (sector_count, compression_flag) from the first 8 bytes."""
-    if len(data) < 8:
+LZSS_FLAG_MASK = 0xFFFF    # mask out variant bits in compression_flags
+
+
+def read_header(data: bytes) -> dict:
+    """Parse the 12-byte CDB header."""
+    if len(data) < HEADER_SIZE:
         raise ValueError("file too small to contain CDB header")
-    sector_count, compression_flag = struct.unpack_from("<II", data, 0)
-    return sector_count, compression_flag
-
-
-def expected_buffer_size(sector_count: int, compressed: bool) -> int:
-    """Mirror the malloc size used by the PS1 CD driver."""
-    if compressed:
-        return sector_count * 8 + 8
-    return sector_count * 4 + 4
+    file_size, sector_count, comp_flags, decompressed_size = struct.unpack_from(
+        "<IHHI", data, 0
+    )
+    lzss_flag = comp_flags & LZSS_FLAG_MASK
+    variant = (comp_flags >> 8) & 0xFF
+    return {
+        "file_size": file_size,
+        "sector_count": sector_count,
+        "compression_flags": comp_flags,
+        "lzss_flag": lzss_flag,
+        "variant": variant,
+        "decompressed_size": decompressed_size,
+    }
 
 
 def lzss_decompress(src: bytes, expected_size: int | None = None) -> bytes:
@@ -85,7 +103,6 @@ def lzss_decompress(src: bytes, expected_size: int | None = None) -> bytes:
             if expected_size is not None and len(out) >= expected_size:
                 return bytes(out)
             if flags & (1 << bit):
-                # literal
                 byte = src[i]
                 i += 1
                 out.append(byte)
@@ -112,59 +129,80 @@ def lzss_decompress(src: bytes, expected_size: int | None = None) -> bytes:
 # Magic numbers for known PS1 sub-asset formats found inside CDBs.
 # (signature_bytes, signature_offset, name, extension)
 SIGNATURES: list[tuple[bytes, int, str, str]] = [
-    (b"\x10\x00\x00\x00", 0, "TIM",  ".tim"),   # PS1 TIM image
+    (b"\x10\x00\x00\x00", 0, "TIM",  ".tim"),   # PS1 TIM image (CONFIRMED in MODEL.CDB)
     (b"\x40\x00\x00\x00", 0, "TMD",  ".tmd"),   # PS1 TMD model
     (b"\x41\x00\x00\x00", 0, "HMD",  ".hmd"),   # PS1 HMD model
-    (b"VAGp",             0, "VAG",  ".vag"),   # PS1 VAG audio
+    (b"VAGp",             0, "VAG",  ".vag"),   # PS1 VAG audio (SOUND.CDB)
     (b"pQES",             0, "SEQ",  ".seq"),   # PsyQ sequence
 ]
 
 
-def find_subfiles(payload: bytes) -> list[tuple[int, str, str]]:
-    """
-    Scan `payload` for known PS1 asset signatures.
+def identify_blob(blob: bytes) -> tuple[str, str]:
+    """Return (type_name, extension) for a sub-file blob, or ('BIN', '.bin')."""
+    for sig, sig_off, name, ext in SIGNATURES:
+        if blob[sig_off : sig_off + len(sig)] == sig:
+            return name, ext
+    return "BIN", ".bin"
 
-    Returns a list of (offset, name, extension) tuples.
-    Detection is best-effort — the CDB index format itself has not yet been
-    fully reverse engineered.
+
+def parse_subfile_table(payload: bytes, count: int) -> list[tuple[int, int]]:
     """
-    hits: list[tuple[int, str, str]] = []
-    # Walk in 4-byte stride; PS1 assets are word-aligned in CDB containers.
+    Read `count` sub-file table entries from the start of `payload`.
+
+    Each entry is {uint32 offset, uint32 size}. Offsets are interpreted as
+    absolute positions inside `payload` (decompressed image).
+    Returns the list of (offset, size) pairs that look in-range.
+    """
+    entries: list[tuple[int, int]] = []
+    table_bytes = count * SUBFILE_ENTRY_SIZE
+    if table_bytes > len(payload):
+        return entries
+    for i in range(count):
+        off, size = struct.unpack_from("<II", payload, i * SUBFILE_ENTRY_SIZE)
+        if off == 0 and size == 0:
+            continue
+        if off >= len(payload) or size == 0 or off + size > len(payload):
+            continue
+        entries.append((off, size))
+    return entries
+
+
+def scan_subfiles_by_magic(payload: bytes) -> list[tuple[int, int]]:
+    """Fallback: word-aligned scan for known signatures, slice between hits."""
+    hits: list[int] = []
     for off in range(0, max(0, len(payload) - 4), 4):
-        for sig, sig_off, name, ext in SIGNATURES:
+        for sig, sig_off, _name, _ext in SIGNATURES:
             if payload[off + sig_off : off + sig_off + len(sig)] == sig:
-                hits.append((off, name, ext))
+                hits.append(off)
                 break
-    return hits
-
-
-def slice_subfiles(
-    payload: bytes, hits: list[tuple[int, str, str]]
-) -> list[tuple[int, str, str, bytes]]:
-    """Slice the payload into sub-file byte ranges using consecutive offsets."""
-    sliced: list[tuple[int, str, str, bytes]] = []
-    for idx, (off, name, ext) in enumerate(hits):
-        next_off = hits[idx + 1][0] if idx + 1 < len(hits) else len(payload)
-        sliced.append((off, name, ext, payload[off:next_off]))
+    sliced: list[tuple[int, int]] = []
+    for idx, off in enumerate(hits):
+        next_off = hits[idx + 1] if idx + 1 < len(hits) else len(payload)
+        sliced.append((off, next_off - off))
     return sliced
 
 
-def extract(cdb_path: Path, out_dir: Path) -> int:
+def extract(cdb_path: Path, out_dir: Path, subfile_count: int | None) -> int:
     data = cdb_path.read_bytes()
-    sector_count, compression_flag = read_header(data)
-    compressed = compression_flag != 0
+    hdr = read_header(data)
+    compressed = hdr["lzss_flag"] != 0
 
     print(f"[+] {cdb_path.name}")
-    print(f"    size            : {len(data)} bytes")
-    print(f"    sector_count    : {sector_count} ({sector_count * CD_SECTOR_SIZE} raw bytes)")
-    print(f"    compression_flag: 0x{compression_flag:08x} ({'LZSS' if compressed else 'raw'})")
-    print(f"    expected buffer : {expected_buffer_size(sector_count, compressed)} bytes")
+    print(f"    file size on disk: {len(data)} bytes")
+    print(f"    header.file_size : {hdr['file_size']} bytes")
+    print(f"    sector_count     : {hdr['sector_count']} "
+          f"(CD raw = {hdr['sector_count'] * CD_SECTOR_SIZE} bytes — informational only)")
+    print(f"    compression_flags: 0x{hdr['compression_flags']:04x} "
+          f"(lzss=0x{hdr['lzss_flag']:04x}, variant=0x{hdr['variant']:02x})")
+    print(f"    decompressed_size: {hdr['decompressed_size']} bytes "
+          f"({'LZSS' if compressed else 'raw'})")
 
-    body = data[8:]
+    body = data[HEADER_SIZE:]
     if compressed:
         try:
-            payload = lzss_decompress(body)
-            print(f"    decompressed    : {len(payload)} bytes")
+            payload = lzss_decompress(body, expected_size=hdr["decompressed_size"])
+            print(f"    decompressed     : {len(payload)} bytes "
+                  f"(target {hdr['decompressed_size']})")
         except Exception as exc:
             print(f"    [!] LZSS decompression failed: {exc}", file=sys.stderr)
             print(f"    [!] falling back to raw body", file=sys.stderr)
@@ -172,25 +210,30 @@ def extract(cdb_path: Path, out_dir: Path) -> int:
     else:
         payload = body
 
-    hits = find_subfiles(payload)
-    print(f"    sub-files found : {len(hits)}")
-    if not hits:
-        print("    [!] no known signatures matched — dumping full payload only")
-
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = cdb_path.stem
 
-    # Always dump the (possibly decompressed) payload for inspection.
     payload_path = out_dir / f"{stem}.payload.bin"
     payload_path.write_bytes(payload)
     print(f"    -> {payload_path}")
 
+    entries: list[tuple[int, int]] = []
+    if subfile_count is not None and subfile_count > 0:
+        entries = parse_subfile_table(payload, subfile_count)
+        print(f"    sub-file table   : {len(entries)}/{subfile_count} valid entries")
+
+    if not entries:
+        entries = scan_subfiles_by_magic(payload)
+        print(f"    magic scan hits  : {len(entries)} (fallback)")
+
     written = 0
-    for idx, (off, name, ext, blob) in enumerate(slice_subfiles(payload, hits)):
+    for idx, (off, size) in enumerate(entries):
+        blob = payload[off : off + size]
+        name, ext = identify_blob(blob)
         sub_path = out_dir / f"{stem}_{idx:04d}_{name}_0x{off:06x}{ext}"
         sub_path.write_bytes(blob)
-        print(f"    -> {sub_path.name}  ({len(blob)} bytes)")
         written += 1
+    print(f"    sub-files written: {written}")
     return written
 
 
@@ -200,12 +243,19 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "out_dir", type=Path, help="directory to write extracted assets into"
     )
+    parser.add_argument(
+        "--subfile-count",
+        type=int,
+        default=None,
+        help="known sub-file table entry count (e.g. 1050 for MODEL.CDB). "
+             "If omitted, falls back to magic-byte scanning.",
+    )
     args = parser.parse_args(argv)
 
     if not args.cdb.is_file():
         print(f"error: {args.cdb} not found", file=sys.stderr)
         return 1
-    extract(args.cdb, args.out_dir)
+    extract(args.cdb, args.out_dir, args.subfile_count)
     return 0
 
 

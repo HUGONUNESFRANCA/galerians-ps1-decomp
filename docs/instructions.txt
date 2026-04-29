@@ -1,67 +1,27 @@
-update docs/asset_format.md, docs/memory_map.md and 
-create tools/cdb_extractor.py with complete findings:
+Read docs/asset_format.md and append this exact Markdown content to document the CDB format:
 
-1. In docs/asset_format.md add:
+## CDB Binary Format (CONFIRMED)
 
-## MODULE.BIN Header Format
-Offset  Size  Value              Description
-0x00    4     0x00000001         Version/type = 1
-0x04    16    "\T4\MODULE.BIN;1" ISO9660 full path (null terminated)
-0x14    N     0x00...            Zero padding then overlay code
+### Header
+- 0x00 (4 bytes): file_size (Total compressed file size)
+- 0x04 (2 bytes): sector_count (CD sectors, e.g., 108 for MODEL.CDB)
+- 0x06 (2 bytes): compression_flags (Low byte: 1=LZSS. High byte: variant/meta)
+- 0x08 (4 bytes): decompressed_size (Target size after LZSS expand, e.g., 14MB)
+- 0x0C (N bytes): sub_file_table (Array of {offset, size} pairs. Count: 1050 for MODEL.CDB)
 
-ISO9660 path structure: \T4\ = track 4 (data track), ;1 = version
+### Sub-file Types (detected by magic bytes)
+- 10 00 00 00 : TIM (.tim) - PS1 texture (indexed or RGB16)
+- (to discover) : TMD (.tmd) - PS1 3D model
+- (to discover) : HMD (.hmd) - PS1 hierarchical model
+- (to discover) : VAG (.vag) - PS1 ADPCM audio (in SOUND.CDB)
 
-## CDB Compression Detection
-CD_GetSize returns two values:
-  sector_count: number of CD sectors
-  compression_flag: 0 = raw/uncompressed, non-zero = LZSS compressed
-  
-Buffer sizing:
-  Uncompressed: sector_count * 4 + 4 bytes
-  Compressed:   sector_count * 8 + 8 bytes (2x for decompression workspace)
+### LZSS Parameters (PS1 variant)
+Window size: 0x1000 bytes (4096). Lookahead: 0x12 bytes (18). Flag byte: 8 bits, MSB first, 1=literal, 0=copy.
+Compression ratio: MODEL.CDB = 3x (4.6MB -> 14MB).
 
-## RAM Destination Map (Table A - Disc 1)
-File          RAM Address   Size estimate
-MODULE.BIN    0x801AD140    2.4MB overlay code
-MODEL.CDB     0x801AD050    4.8MB 3D models
-DISPLAY.CDB   0x801AD0C8    2.5MB UI textures
-SOUND.CDB     0x801ACEA8    15.9MB audio data
-ITEMTIM.CDB   0x801ACFD8    14.5MB item textures
-MENU.CDB      0x801ACF60    2.6MB menu textures
+### Known CDB Files and Contents
+- MODEL.CDB: Compressed 4.6MB -> Decompressed 14.0MB (1050 Sub-files) - TIM textures + TMD models
+- SOUND.CDB: Compressed 15.9MB - VAG audio samples
+- DISPLAY.CDB: Compressed 2.5MB - TIM UI textures
 
-2. Update docs/memory_map.md - new confirmed functions:
-
-CD SYSTEM FUNCTIONS:
-0x8018e2c4  CD_LoadFile(handle, filename)   CONFIRMED
-0x8018f254  CD_CheckReady()                 CONFIRMED - returns 0 if busy
-0x80185a7c  CD_Yield() or Scheduler_Yield   CONFIRMED - called while waiting
-0x8017d590  CD_SetFilename(desc, name)      CONFIRMED
-0x8017d5c0  CD_CopyDesc(dest, src)          CONFIRMED
-0x8018e12c  CD_Open(handle)                 CONFIRMED
-0x8018e1f4  CD_GetSize(handle, sectors, mode) CONFIRMED - returns compression flag
-0x801855b4  malloc(size)                    CONFIRMED
-0x8018e234  CD_Read(handle, buf, sectors, size) CONFIRMED - reads+decompresses
-
-NEW GLOBALS:
-0x801AD050  g_ModelCDB_Base    void*  MODEL.CDB RAM base
-0x801AD0C8  g_DisplayCDB_Base  void*  DISPLAY.CDB RAM base
-0x801ACEA8  g_SoundCDB_Base    void*  SOUND.CDB RAM base
-0x801ACFD8  g_ItemTimCDB_Base  void*  ITEMTIM.CDB RAM base
-0x801ACF60  g_MenuCDB_Base     void*  MENU.CDB RAM base
-0x80190e0c  g_FileTableA       pair[] 10 {dest,name} pairs - Disc 1
-0x80190e5c  g_FileTableB       pair[] 7 {dest,name} pairs - Disc 2
-0x8011c0dc  g_CDConfig         data   CD driver config block
-0x8011c0e4  g_CDDefaultPath    char*  default CD path
-
-3. Create tools/cdb_extractor.py that:
-   Opens a .CDB file, reads header to detect compression,
-   if compression_flag != 0: attempts LZSS decompression
-   LZSS PS1 variant parameters:
-     window size: 0x1000 (4096 bytes)
-     lookahead: 0x12 (18 bytes)  
-     flag byte: 8 bits, 1=literal, 0=copy from window
-   Lists all detected sub-files within the CDB
-   Extracts each sub-file to output directory
-   Usage: python tools/cdb_extractor.py MODEL.CDB ./extracted/
-
-4. commit: "feat: complete CD loading pipeline - all functions mapped, RAM destinations confirmed"
+Only modify asset_format.md.

@@ -68,3 +68,27 @@ Buffer sizing:
 
 ## XA.MXA Format
 - XA audio interleaved with data. Streams directly from CD for cutscenes/ambient.
+
+## CDB Binary Format (CONFIRMED)
+
+### Header
+- 0x00 (4 bytes): file_size (Total compressed file size)
+- 0x04 (2 bytes): sector_count (CD sectors, e.g., 108 for MODEL.CDB)
+- 0x06 (2 bytes): compression_flags (Low byte: 1=LZSS. High byte: variant/meta)
+- 0x08 (4 bytes): decompressed_size (Target size after LZSS expand, e.g., 14MB)
+- 0x0C (N bytes): sub_file_table (Array of {offset, size} pairs. Count: 1050 for MODEL.CDB)
+
+### Sub-file Types (detected by magic bytes)
+- 10 00 00 00 : TIM (.tim) - PS1 texture (indexed or RGB16)
+- (to discover) : TMD (.tmd) - PS1 3D model
+- (to discover) : HMD (.hmd) - PS1 hierarchical model
+- (to discover) : VAG (.vag) - PS1 ADPCM audio (in SOUND.CDB)
+
+### LZSS Parameters (PS1 variant)
+Window size: 0x1000 bytes (4096). Lookahead: 0x12 bytes (18). Flag byte: 8 bits, MSB first, 1=literal, 0=copy.
+Compression ratio: MODEL.CDB = 3x (4.6MB -> 14MB).
+
+### Known CDB Files and Contents
+- MODEL.CDB: Compressed 4.6MB -> Decompressed 14.0MB (1050 Sub-files) - TIM textures + TMD models
+- SOUND.CDB: Compressed 15.9MB - VAG audio samples
+- DISPLAY.CDB: Compressed 2.5MB - TIM UI textures
