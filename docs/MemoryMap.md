@@ -492,6 +492,7 @@ desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
 | `0x80187420` | `SPU_VoiceInit`     | ✅ | Zera 32 bytes do voice block; seta pitch+volume = `0x1000` (default 44100 Hz) |
 | `0x80187450` | `SPU_BufferClear`   | ✅ | `memset(buffer, 0, 32)` — limpa SPU output/reverb buffer |
 | `0x8011d198` | `Sound_Manager`     | ✅ | **Carregador central de assets de áudio.** Lê todas as sound tables a partir de `0x8011A164`. Offset interno de leitura em `0x8011d208`. |
+| `0x801bfae8` | `SEQ_Player`        | 🟡 | Reads/plays pQES SEQ data loaded at `0x80037ae0`; located via XREF from pQES magic in RAM. |
 | `0x80184898` | `SPU_SetVolume`     | 🟡 | 3 SPU refs |
 | `0x801834B4` | `SPU_SetADSR`       | 🟡 | 2 SPU refs |
 | `0x80177328` | `SPU_KeyOnOff`      | 🟡 | 4 SPU refs (provavelmente `SPU_KEY_ON/OFF`) |
@@ -520,7 +521,23 @@ desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
 
 SEQ (pQES) = PS1 sequencer format (analogous to MIDI). Drives SPU hardware
 with note events + timing. Sample data lives in a separate SPU bank
-(candidate: `MDT.CDB` 1.5 MB as VH+VB pair).
+(candidate: `MOT.CDB` 1.5 MB as VH+VB pair).
+
+### SEQ Player — LOCATED ✅
+
+| Property | Value |
+|----------|-------|
+| pQES magic in RAM | `0x80037ae0` |
+| SEQ player function | `0x801bfae8` |
+| How located | XREF from pQES magic address in RAM dump |
+| Confidence | 🟡 Alta — located, not yet fully analyzed |
+
+Confirmed audio pipeline:
+```
+SOUND.CDB → CD_LoadFile → RAM 0x80037ae0 → FUN_801bfae8 (SEQ Player)
+```
+
+> **Next:** Analyze `FUN_801bfae8` in Ghidra to confirm SEQ parsing logic and SPU dispatch.
 
 ### Sound Tables — `0x8011A164` – `0x8011B07C`
 
@@ -576,7 +593,7 @@ typedef struct {
 |                                       | Option B: pQES interpreter with OpenAL backend |
 |                                       | Option C: pre-render all 95 tracks to OGG (simplest) |
 | XA.MXA streaming (85 MB)             | Decode XA-ADPCM sectors to PCM on the fly → SDL_Mixer / OpenAL streaming buffer |
-| SPU sample banks (VB from MDT.CDB)   | Decode ADPCM blocks → PCM WAV at build time → OpenAL buffers |
+| SPU sample banks (VB from MOT.CDB)   | Decode ADPCM blocks → PCM WAV at build time → OpenAL buffers |
 | ADPCM decode                          | decoder offline; shipar OGG/WAV |
 | SPU reverb                            | OpenAL EFX extension |
 | Rumble via SPU/SIO                    | `SDL_GameController` rumble / `XInputSetState` |

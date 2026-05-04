@@ -16,7 +16,7 @@
 | MENU.CDB | 2.6MB | 36589 | Menu textures |
 | MODEL.CDB | 4.8MB | 38942 | 3D models |
 | MODULE.BIN | 2.4MB | 40229 | Code overlays → RAM 0x801AD140 |
-| MDT.CDB | 1.5MB | 41429 | Map/motion data |
+| MOT.CDB | 1.5MB | 41429 | Map/motion data |
 | PSX_CD.DUM | 30.7MB | 243385 | CD padding dummy |
 | SOUND.CDB | 15.9MB | 42203 | 95 SEQ (pQES) sequencer files — RAW, no LZSS |
 | XA.MXA | 85MB | 49976 | XA streaming music/cutscenes |
@@ -102,7 +102,7 @@ held in a separate SPU bank (not embedded in SOUND.CDB).
 | Candidate | Size | Likely role |
 |-----------|------|-------------|
 | `XA.MXA`    | 85 MB  | XA-ADPCM streaming (cutscenes / BGM) |
-| `MDT.CDB`   | 1.5 MB | VH + VB (voice header + voice body) — companion bank for SEQ |
+| `MOT.CDB`   | 1.5 MB | VH + VB (voice header + voice body) — companion bank for SEQ |
 | `MODULE.BIN` overlays | 2.4 MB | May pre-load per-area SPU RAM banks |
 
 ## CDB Binary Format (CONFIRMED)
@@ -170,7 +170,7 @@ all CDB assets at build time:
 | | Option B: implement pQES interpreter with OpenAL backend |
 | | Option C: pre-render all 95 tracks to OGG at build time (simplest) |
 | `XA.MXA` XA-ADPCM streaming | Decode XA sectors to PCM on the fly → SDL_Mixer / OpenAL streaming buffer |
-| SPU sample banks (VB files from `MDT.CDB`) | Decode ADPCM blocks → PCM WAV at build time → OpenAL buffers, trigger via SEQ note events |
+| SPU sample banks (VB files from `MOT.CDB`) | Decode ADPCM blocks → PCM WAV at build time → OpenAL buffers, trigger via SEQ note events |
 | TMD loader | convert to GLTF or custom binary at build time |
 | TIM textures | convert to PNG/DDS at build time |
 | HMD (8 skeletal characters) | convert to GLTF with skeleton at build time |

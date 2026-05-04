@@ -24,9 +24,9 @@ CPU: MIPS R3000A, Little Endian.
 - Confiança: ✅ Confirmado / 🟡 Alta / 🟠 Média / 🔴 Baixa
 
 ## Próximas Tarefas
-- Priority 1: Run cdb_extractor.py on MDT.CDB (check for VH/VB audio bank headers)
-- Priority 2: Analyze XA.MXA structure (XA sectors interleaved with data?)
-- Priority 3: Find SEQ player function in Ghidra (search for pQES magic: 70 51 45 53)
+- Priority 1: Analyze FUN_801bfae8 in Ghidra (SEQ Player)
+- Priority 2: Run extractor on MOT.CDB (not MDT.CDB)
+- Priority 3: Check XA.MXA structure for XA sector headers
 - Priority 4: Analyze FUN_8011d198 (Sound Manager) - paste pseudo-C
 - Priority 5: Analyze FUN_8018669c (Frame_First after Engine_Init)
 - Priority: Implement GTE_H (COP2 0xE800) adjustment for true widescreen FOV to prevent 16:9 stretching.
