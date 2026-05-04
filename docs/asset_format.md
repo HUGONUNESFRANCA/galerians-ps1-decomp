@@ -18,7 +18,7 @@
 | MODULE.BIN | 2.4MB | 40229 | Code overlays → RAM 0x801AD140 |
 | MDT.CDB | 1.5MB | 41429 | Map/motion data |
 | PSX_CD.DUM | 30.7MB | 243385 | CD padding dummy |
-| SOUND.CDB | 15.9MB | 42203 | SFX + BGM audio |
+| SOUND.CDB | 15.9MB | 42203 | 95 SEQ (pQES) sequencer files — RAW, no LZSS |
 | XA.MXA | 85MB | 49976 | XA streaming music/cutscenes |
 
 ## Asset Loader
@@ -70,7 +70,40 @@ Buffer sizing:
 | MENU.CDB     | `0x801ACF60` | 2.6 MB menu textures    |
 
 ## XA.MXA Format
-- XA audio interleaved with data. Streams directly from CD for cutscenes/ambient.
+- 85 MB, LBA 49976. XA-ADPCM sectors interleaved directly with data sectors on the CD.
+- Streams in real time from the drive; never fully loaded into PS1 RAM.
+- Used for cutscene audio and ambient/BGM streaming.
+- PC port: decode XA-ADPCM sectors to PCM on the fly; feed via SDL_Mixer music channel or an OpenAL streaming buffer.
+
+## SOUND.CDB Format (CONFIRMED)
+
+- **Size:** 15,919,104 bytes (15.18 MB, 7773 CD sectors)
+- **compression_flag:** `0x00000000` — RAW, no LZSS compression
+- **Content:** 95 SEQ files in pQES format (PsyQ sequencer)
+- **RAM destination:** `0x801ACEA8` (`g_SoundCDB_Base`)
+
+### pQES SEQ Files
+
+Galerians uses the PsyQ SEQ + SPU bank system rather than raw VAG samples:
+
+| Property | Value |
+|----------|-------|
+| Magic | `70 51 45 53` (`pQES`) |
+| Count | 95 files |
+| Max size | ~209 KB (largest = main BGM themes) |
+| Role | PS1 equivalent of MIDI — note events + timing + SPU commands |
+| Player | `Sound_Manager` @ `0x8011d198` |
+
+SEQ files drive the SPU hardware with precise timing; they reference sample data
+held in a separate SPU bank (not embedded in SOUND.CDB).
+
+### SPU Sample Banks — NOT in SOUND.CDB
+
+| Candidate | Size | Likely role |
+|-----------|------|-------------|
+| `XA.MXA`    | 85 MB  | XA-ADPCM streaming (cutscenes / BGM) |
+| `MDT.CDB`   | 1.5 MB | VH + VB (voice header + voice body) — companion bank for SEQ |
+| `MODULE.BIN` overlays | 2.4 MB | May pre-load per-area SPU RAM banks |
 
 ## CDB Binary Format (CONFIRMED)
 
@@ -111,7 +144,7 @@ Compression ratio: MODEL.CDB ≈ 3.0× (4.6 MB → 13.4 MB).
 | File         | Compressed | Decompressed | Sub-files | Composition                  |
 |--------------|-----------:|-------------:|----------:|------------------------------|
 | MODEL.CDB    |    4.6 MB  |     13.4 MB  |    1050   | 366 TIM + 676 TMD + 8 HMD    |
-| SOUND.CDB    |   15.9 MB  |  *(pending)* |  *(pending)* | VAG audio samples         |
+| SOUND.CDB    |   15.9 MB  |   15.9 MB    |      95      | 95 SEQ (pQES sequences), RAW — no LZSS |
 | DISPLAY.CDB  |    2.5 MB  |  *(pending)* |  *(pending)* | TIM UI textures           |
 
 The MODEL.CDB inventory was confirmed by running `tools/cdb_extractor.py`
@@ -133,7 +166,11 @@ all CDB assets at build time:
 | `CD_Read` / `CD_LoadFile` | standard file open + read |
 | LZSS decompressor at runtime | pre-extracted assets via `tools/cdb_extractor.py` |
 | `MODEL.CDB` raw binary | `assets/MODEL/*.tmd`, `assets/MODEL/*.tim`, `assets/MODEL/*.hmd` |
-| `SOUND.CDB` raw binary | `assets/SOUND/*.vag` |
+| `SOUND.CDB` 95 pQES SEQ files | Option A: decode SEQ → standard MIDI, play with FluidSynth |
+| | Option B: implement pQES interpreter with OpenAL backend |
+| | Option C: pre-render all 95 tracks to OGG at build time (simplest) |
+| `XA.MXA` XA-ADPCM streaming | Decode XA sectors to PCM on the fly → SDL_Mixer / OpenAL streaming buffer |
+| SPU sample banks (VB files from `MDT.CDB`) | Decode ADPCM blocks → PCM WAV at build time → OpenAL buffers, trigger via SEQ note events |
 | TMD loader | convert to GLTF or custom binary at build time |
 | TIM textures | convert to PNG/DDS at build time |
 | HMD (8 skeletal characters) | convert to GLTF with skeleton at build time |

@@ -508,6 +508,20 @@ desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
 - ADPCM compression: 4-bit, 28 samples per block
 - DMA tables (transfers para SPU RAM): `0x80194078` e `0x80195FD0`
 
+### SOUND.CDB — Confirmed Format
+
+| Property | Value |
+|----------|-------|
+| File size | 15,919,104 bytes (15.18 MB, 7773 sectors) |
+| compression_flag | `0x00000000` — RAW (no LZSS) |
+| RAM base | `0x801ACEA8` (`g_SoundCDB_Base`) |
+| Sub-files | 95 SEQ files (pQES magic `70 51 45 53`) |
+| Player | `Sound_Manager` @ `0x8011d198` |
+
+SEQ (pQES) = PS1 sequencer format (analogous to MIDI). Drives SPU hardware
+with note events + timing. Sample data lives in a separate SPU bank
+(candidate: `MDT.CDB` 1.5 MB as VH+VB pair).
+
 ### Sound Tables — `0x8011A164` – `0x8011B07C`
 
 **Base:** `0x8011A164` (lida por `Sound_Manager` @ `0x8011d198`).
@@ -558,8 +572,12 @@ typedef struct {
 | `SPU_SetVolume`                       | `alSourcef(src, AL_GAIN, vol)` |
 | `SPU_SetADSR`                         | ADSR em software (curva sobre `AL_GAIN` por frame) |
 | SPU voices (24 hardware)              | OpenAL `AL_SOURCE` por voz (24 sources) |
+| SEQ (pQES) playback — 95 files        | Option A: decode → standard MIDI + FluidSynth |
+|                                       | Option B: pQES interpreter with OpenAL backend |
+|                                       | Option C: pre-render all 95 tracks to OGG (simplest) |
+| XA.MXA streaming (85 MB)             | Decode XA-ADPCM sectors to PCM on the fly → SDL_Mixer / OpenAL streaming buffer |
+| SPU sample banks (VB from MDT.CDB)   | Decode ADPCM blocks → PCM WAV at build time → OpenAL buffers |
 | ADPCM decode                          | decoder offline; shipar OGG/WAV |
-| XA streaming                          | `SDL_Mixer` music channel via `AL_STREAMING` |
 | SPU reverb                            | OpenAL EFX extension |
 | Rumble via SPU/SIO                    | `SDL_GameController` rumble / `XInputSetState` |
 | `g_FrameCounter`                      | PC frame counter via `QueryPerformanceCounter` |
@@ -826,7 +844,7 @@ Formatos de Textura:
 - [x] Sistema de Corrotinas
 - [x] Renderer (parcial)
 - [x] Sistema de Câmera (completo — `Camera_LoadToGTE`, `Camera_Manager`, `Camera_RecordFrame`)
-- [ ] Sistema de Áudio
+- [x] Sistema de Áudio (SOUND.CDB: 95 pQES SEQ files confirmados; SPU bank candidates identificados)
 - [ ] Sistema de FMV/MDEC
 - [ ] Overlays de mapa/área
 
