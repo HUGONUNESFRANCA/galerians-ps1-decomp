@@ -131,7 +131,7 @@ def is_valid_tim(blob: bytes) -> bool:
       3. the first block's width and height fields (offsets 0x10/0x12)
          must both be non-zero
     """
-    if len(blob) < 16:
+    if len(blob) < 20:
         return False
     flag = struct.unpack_from("<I", blob, 4)[0]
     if flag not in VALID_TIM_FLAGS:

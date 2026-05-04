@@ -16,7 +16,7 @@
 | MENU.CDB | 2.6MB | 36589 | Menu textures |
 | MODEL.CDB | 4.8MB | 38942 | 3D models |
 | MODULE.BIN | 2.4MB | 40229 | Code overlays → RAM 0x801AD140 |
-| MOT.CDB | 1.5MB | 41429 | Map/motion data |
+| MOT.CDB | 1.5MB | 41429 | Character animation system — 670 MOT anims + 160 TMD + 36 TIM + 8 HMD rigs |
 | PSX_CD.DUM | 30.7MB | 243385 | CD padding dummy |
 | SOUND.CDB | 15.9MB | 42203 | 95 SEQ (pQES) sequencer files — RAW, no LZSS |
 | XA.MXA | 85MB | 49976 | XA streaming music/cutscenes |
@@ -92,7 +92,7 @@ Galerians uses the PsyQ SEQ + SPU bank system rather than raw VAG samples:
 | Count | 95 files |
 | Max size | ~209 KB (largest = main BGM themes) |
 | Role | PS1 equivalent of MIDI — note events + timing + SPU commands |
-| Player | `Sound_Manager` @ `0x8011d198` |
+| Player | `SEQ_Player` @ `0x80130764` ✅ |
 
 SEQ files drive the SPU hardware with precise timing; they reference sample data
 held in a separate SPU bank (not embedded in SOUND.CDB).
@@ -102,8 +102,81 @@ held in a separate SPU bank (not embedded in SOUND.CDB).
 | Candidate | Size | Likely role |
 |-----------|------|-------------|
 | `XA.MXA`    | 85 MB  | XA-ADPCM streaming (cutscenes / BGM) |
-| `MOT.CDB`   | 1.5 MB | VH + VB (voice header + voice body) — companion bank for SEQ |
 | `MODULE.BIN` overlays | 2.4 MB | May pre-load per-area SPU RAM banks |
+
+> ⚠️ `MOT.CDB` was previously listed here as a VH+VB candidate. **CONFIRMED WRONG** — MOT.CDB contains animation/motion data (see MOT.CDB section below). SPU sample bank source is still **unknown**.
+
+## MOT.CDB Format (CONFIRMED)
+
+- **Compressed:** 1.51 MB (LZSS) → **Decompressed:** 4.13 MB (2.73× ratio)
+- **compression_flag:** `0x00060001` — LZSS, upper bits = variant 6
+- **Payload header (first 4 bytes of decompressed body):** `00 03 00 00` = `0x300` = 768 (motion count field)
+
+### Contents
+
+| Count | Type | Notes |
+|------:|------|-------|
+| 670 | BIN | Proprietary MOT animation data — magic byte **unknown**, needs new extractor rule |
+| 160 | TMD | 3D geometry (pose / reference meshes per animation) |
+|  36 | TIM | Textures (likely character skin textures) |
+|   8 | HMD | Skeletal rigs — same 8 characters as MODEL.CDB |
+| **874** | **total** | |
+
+> **HMD overlap:** MODEL.CDB carries the same 8 HMD rigs for rendering geometry;
+> MOT.CDB's 8 HMDs are the skeletal definitions used at runtime to drive the 670 animations.
+
+### Motion Data Pipeline
+
+```
+MOT.CDB  → 8 HMD rigs (skeleton def) + 670 BIN animations (keyframes)
+MODEL.CDB → 8 HMD rigs (geometry)    + 676 TMD (room/scene models)
+Together  → full character animation system
+```
+
+---
+
+## Animation System
+
+### Characters with Skeletal Rigs (8 HMD slots)
+
+Both MODEL.CDB and MOT.CDB contain exactly 8 HMD files — one per character:
+
+| Slot | Character | Status |
+|-----:|-----------|--------|
+| 0 | Rion (main character) | 🟡 likely |
+| 1 | Rita | 🟡 likely |
+| 2 | Dorothy | 🟡 likely |
+| 3–7 | Key NPCs / enemies | 🔴 to confirm |
+
+HMD role by CDB:
+- **MODEL.CDB HMDs** — geometry meshes bound to a skeleton (used for rendering)
+- **MOT.CDB HMDs** — skeleton definitions that bind to the 670 BIN motion clips at runtime
+
+### MOT Binary Format (Proprietary — Needs Reverse Engineering)
+
+| Offset | Type | Field | Notes |
+|--------|------|-------|-------|
+| `+0x00` | `uint32` | `motion_count` | `0x00000300` = 768 declared slots; 670 non-empty found by extractor |
+| `+0x04` | … | motion entries | Format **unknown** — needs Ghidra analysis |
+
+**Magic byte:** UNKNOWN. `cdb_extractor.py` cannot currently detect BIN/MOT files by magic.
+The 670 BIN files are found by elimination after all known magics (TIM / TMD / HMD / SEQ) are matched.
+
+> **Next step:** Open a BIN file in hex editor or Ghidra to find a repeating header pattern and define a new magic byte / detection heuristic for the extractor.
+
+### Runtime Animation Pipeline (Hypothesized)
+
+```
+Load phase:
+  MOT.CDB  ──→ 8 HMD (skeleton defs) + 670 BIN (motion keyframes)
+  MODEL.CDB ──→ 8 HMD (geometry)     + 676 TMD (room/scene models)
+
+Per-frame:
+  SEQ_Player (FUN_80130764) drives timing
+  BIN motion clip → bone transform array → HMD skeleton → GTE → GPU draw
+```
+
+---
 
 ## CDB Binary Format (CONFIRMED)
 
@@ -144,16 +217,15 @@ Compression ratio: MODEL.CDB ≈ 3.0× (4.6 MB → 13.4 MB).
 | File         | Compressed | Decompressed | Sub-files | Composition                  |
 |--------------|-----------:|-------------:|----------:|------------------------------|
 | MODEL.CDB    |    4.6 MB  |     13.4 MB  |    1050   | 366 TIM + 676 TMD + 8 HMD    |
-| SOUND.CDB    |   15.9 MB  |   15.9 MB    |      95      | 95 SEQ (pQES sequences), RAW — no LZSS |
+| MOT.CDB      |    1.5 MB  |     4.1 MB   |     874   | 670 BIN (MOT anims) + 160 TMD + 36 TIM + 8 HMD |
+| SOUND.CDB    |   15.9 MB  |   15.9 MB    |      95   | 95 SEQ (pQES sequences), RAW — no LZSS |
 | DISPLAY.CDB  |    2.5 MB  |  *(pending)* |  *(pending)* | TIM UI textures           |
 
-The MODEL.CDB inventory was confirmed by running `tools/cdb_extractor.py`
-against the disk image and tallying magic-byte hits.
+Inventories confirmed by running `tools/cdb_extractor.py` against the disk image and tallying magic-byte hits.
 
-**HMD note:** The 8 HMD files almost certainly represent the 8 main characters with
-full skeletal rigs (Rion, Rita, Dorothy, and key NPCs). HMD is the PS1 hierarchical
-model format used specifically for rigged/animated characters, as opposed to TMD
-which is used for static scene geometry.
+**HMD note:** Both MODEL.CDB and MOT.CDB contain 8 HMD files — these are the same 8 main characters (Rion, Rita, Dorothy, key NPCs). MODEL.CDB's HMDs carry the rendering geometry; MOT.CDB's HMDs are the skeletal rig definitions used to drive the 670 BIN animations at runtime.
+
+**BIN/MOT note:** The 670 BIN files in MOT.CDB are proprietary animation keyframe data (internal name: MOT format). Their magic bytes are unknown — `cdb_extractor.py` needs a new detection rule for this type.
 
 ## PC Port Notes
 
@@ -170,12 +242,26 @@ all CDB assets at build time:
 | | Option B: implement pQES interpreter with OpenAL backend |
 | | Option C: pre-render all 95 tracks to OGG at build time (simplest) |
 | `XA.MXA` XA-ADPCM streaming | Decode XA sectors to PCM on the fly → SDL_Mixer / OpenAL streaming buffer |
-| SPU sample banks (VB files from `MOT.CDB`) | Decode ADPCM blocks → PCM WAV at build time → OpenAL buffers, trigger via SEQ note events |
+| `HMD` skeletal rigs (8 chars) | convert to GLTF 2.0 with skeleton at build time |
+| `MOT` 670 BIN motion clips | decode MOT format → GLTF 2.0 animations (one `.glb` per clip) |
+| Animation build step | combine HMD + BIN → one GLTF 2.0 file per character (mesh + skeleton + all animations) |
+| Runtime animation | skeletal interpolation (lerp between keyframes); cgltf + custom bone stack, or ozz-animation |
+| SPU sample banks | Source **unknown** (MOT.CDB is animation data, not audio) — locate via SPU RAM dump |
 | TMD loader | convert to GLTF or custom binary at build time |
 | TIM textures | convert to PNG/DDS at build time |
-| HMD (8 skeletal characters) | convert to GLTF with skeleton at build time |
 | VAG ADPCM audio | decode to WAV/OGG at build time |
 
 Pre-extraction strategy: run `tools/cdb_extractor.py` on all CDBs once; ship the
 decompressed sub-files. This eliminates the PS1 LZSS decompressor and CD polling
 loop entirely from the port.
+
+### Animation Port Strategy
+
+| Step | Action |
+|------|--------|
+| Build-time 1 | Extract 8 HMD files from MODEL.CDB → convert to GLTF 2.0 with skeleton |
+| Build-time 2 | Extract 670 BIN files from MOT.CDB → decode MOT format → GLTF 2.0 animation tracks |
+| Build-time 3 | Combine per-character HMD + relevant BIN clips → one `.glb` per character |
+| Runtime | Load `.glb`; play animations via skeletal interpolation (lerp between keyframes per bone) |
+
+> **Blocker:** MOT binary format magic and internal layout are unknown. Reverse engineering required before build-time steps 2–3 can be implemented. See Animation System section above.

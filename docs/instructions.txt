@@ -1,27 +1,59 @@
-Read docs/asset_format.md and append this exact Markdown content to document the CDB format:
+update docs/asset_format.md and docs/memory_map.md 
+with complete SOUND.CDB findings:
 
-## CDB Binary Format (CONFIRMED)
+1. SOUND.CDB CONFIRMED FORMAT:
+   Header: 8 bytes (standard CDB header)
+   compression_flag: 0x00000000 = RAW (no LZSS)
+   File size: 15,919,104 bytes (15.18 MB, 7773 CD sectors)
+   Content: 95 SEQ sequencer files (pQES format)
 
-### Header
-- 0x00 (4 bytes): file_size (Total compressed file size)
-- 0x04 (2 bytes): sector_count (CD sectors, e.g., 108 for MODEL.CDB)
-- 0x06 (2 bytes): compression_flags (Low byte: 1=LZSS. High byte: variant/meta)
-- 0x08 (4 bytes): decompressed_size (Target size after LZSS expand, e.g., 14MB)
-- 0x0C (N bytes): sub_file_table (Array of {offset, size} pairs. Count: 1050 for MODEL.CDB)
+2. AUDIO SYSTEM ARCHITECTURE (update docs):
 
-### Sub-file Types (detected by magic bytes)
-- 10 00 00 00 : TIM (.tim) - PS1 texture (indexed or RGB16)
-- (to discover) : TMD (.tmd) - PS1 3D model
-- (to discover) : HMD (.hmd) - PS1 hierarchical model
-- (to discover) : VAG (.vag) - PS1 ADPCM audio (in SOUND.CDB)
+   Galerians uses PsyQ SEQ+SPU bank system (not raw VAG):
+   
+   SEQ files (pQES magic) — 95 total in SOUND.CDB:
+   - PS1 equivalent of MIDI — note events + timing + SPU commands
+   - Drive the SPU hardware with precise timing
+   - Sizes: up to 209KB (largest = main BGM themes)
+   - Sound_Manager (0x8011d198) parses and plays these
+   
+   SPU sample banks (ADPCM data) — NOT in SOUND.CDB:
+   Candidates:
+   a) XA.MXA (85MB)    → XA-ADPCM streaming for cutscenes/BGM
+   b) MDT.CDB (1.5MB)  → likely VH+VB (voice header + voice body)
+                          companion files for the SEQ bank
+   c) MODULE.BIN overlays → pre-load SPU RAM banks per area
 
-### LZSS Parameters (PS1 variant)
-Window size: 0x1000 bytes (4096). Lookahead: 0x12 bytes (18). Flag byte: 8 bits, MSB first, 1=literal, 0=copy.
-Compression ratio: MODEL.CDB = 3x (4.6MB -> 14MB).
+3. TIM magic false-positive fix for cdb_extractor.py:
+   Add validation: TIM flag byte must be in {0,1,2,3,8,9,10,11}
+   Reject if file < 16 bytes
+   Reject if width or height fields are zero
+   Apply this fix to prevent noise in non-model CDBs
 
-### Known CDB Files and Contents
-- MODEL.CDB: Compressed 4.6MB -> Decompressed 14.0MB (1050 Sub-files) - TIM textures + TMD models
-- SOUND.CDB: Compressed 15.9MB - VAG audio samples
-- DISPLAY.CDB: Compressed 2.5MB - TIM UI textures
+4. Update PORT NOTES for audio:
+   PS1 audio → PC audio replacement:
+   
+   SEQ (pQES) playback:
+   → Option A: decode SEQ to standard MIDI, play with FluidSynth
+   → Option B: implement pQES interpreter with OpenAL backend
+   → Option C: pre-render all 95 SEQ tracks to OGG at build time
+                (simplest path for initial port)
+   
+   XA.MXA streaming:
+   → Decode XA-ADPCM sectors to PCM on the fly
+   → Use SDL_Mixer music channel or OpenAL streaming buffer
+   
+   SPU sample banks (VB files):
+   → Decode ADPCM blocks to PCM WAV at build time
+   → Load as OpenAL buffers, trigger via SEQ note events
 
-Only modify asset_format.md.
+5. Add to CLAUDE.md Next Tasks:
+   Priority 1: Run cdb_extractor.py on MDT.CDB 
+               (check for VH/VB audio bank headers)
+   Priority 2: Analyze XA.MXA structure 
+               (XA sectors interleaved with data?)
+   Priority 3: Find SEQ player function in Ghidra
+               (Search for pQES magic: 70 51 45 53)
+
+6. commit: "feat: SOUND.CDB fully analyzed - 95 pQES SEQ files, 
+   SPU bank system documented, audio port strategy defined"

@@ -81,6 +81,9 @@ MAPA DE MEMÓRIA GLOBAL
 0x801eb574  g_EngineStatePtr
 0x8019b4c8  g_RendererVtable
 0x8019b4d2  g_RendererDebugLevel
+0x801bfae8  g_SEQ_DataPtr        (PTR → 0x80037ae0 — pointer to active SEQ in RAM; XREF: FUN_80130764 @ 0x801307ac)
+0x801bfaf0  g_SEQ_Size           (SEQ size in bytes, e.g. 0x00000DF8 = 3576; XREF: FUN_8012f3bc, FUN_8012f4dc)
+0x801bfaf4  g_SEQ_LoopMarker     (0xFFFFFFFF = loop/end sentinel; XREF: FUN_8012f3bc, FUN_8012f4dc)
 0x801BFD10  g_ActiveCameraMatrix (matriz viva, muda no movimento)
 0x801C1768  PTR_FUN_801c1768     (ponteiro de função global de câmera)
 0x801C1778  g_CameraSlots        (4 × stride 0xC60)
@@ -492,7 +495,9 @@ desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
 | `0x80187420` | `SPU_VoiceInit`     | ✅ | Zera 32 bytes do voice block; seta pitch+volume = `0x1000` (default 44100 Hz) |
 | `0x80187450` | `SPU_BufferClear`   | ✅ | `memset(buffer, 0, 32)` — limpa SPU output/reverb buffer |
 | `0x8011d198` | `Sound_Manager`     | ✅ | **Carregador central de assets de áudio.** Lê todas as sound tables a partir de `0x8011A164`. Offset interno de leitura em `0x8011d208`. |
-| `0x801bfae8` | `SEQ_Player`        | 🟡 | Reads/plays pQES SEQ data loaded at `0x80037ae0`; located via XREF from pQES magic in RAM. |
+| `0x80130764` | `SEQ_Player`        | ✅ | Confirmed SEQ player. Reads `g_SEQ_DataPtr` (`0x801bfae8`) at offset `0x801307ac` to get active SEQ at `0x80037ae0`. |
+| `0x8012f3bc` | `SEQ_Reader_A`      | 🟡 | Reads `g_SEQ_Size` (`0x801bfaf0`) and `g_SEQ_LoopMarker` (`0x801bfaf4`). |
+| `0x8012f4dc` | `SEQ_Reader_B`      | 🟡 | Reads `g_SEQ_Size` (`0x801bfaf0`) and `g_SEQ_LoopMarker` (`0x801bfaf4`). |
 | `0x80184898` | `SPU_SetVolume`     | 🟡 | 3 SPU refs |
 | `0x801834B4` | `SPU_SetADSR`       | 🟡 | 2 SPU refs |
 | `0x80177328` | `SPU_KeyOnOff`      | 🟡 | 4 SPU refs (provavelmente `SPU_KEY_ON/OFF`) |
@@ -517,27 +522,30 @@ desse contexto que vem a confirmação da semântica dos 4 canais lógicos.
 | compression_flag | `0x00000000` — RAW (no LZSS) |
 | RAM base | `0x801ACEA8` (`g_SoundCDB_Base`) |
 | Sub-files | 95 SEQ files (pQES magic `70 51 45 53`) |
-| Player | `Sound_Manager` @ `0x8011d198` |
+| SEQ Player | `SEQ_Player` @ `0x80130764` ✅ |
 
 SEQ (pQES) = PS1 sequencer format (analogous to MIDI). Drives SPU hardware
-with note events + timing. Sample data lives in a separate SPU bank
-(candidate: `MOT.CDB` 1.5 MB as VH+VB pair).
+with note events + timing. Sample data lives in a separate SPU bank —
+source **unknown** (`MOT.CDB` was a prior candidate but is confirmed animation data, not audio).
 
-### SEQ Player — LOCATED ✅
+### SEQ Data Structure in RAM — CONFIRMED ✅
 
-| Property | Value |
-|----------|-------|
-| pQES magic in RAM | `0x80037ae0` |
-| SEQ player function | `0x801bfae8` |
-| How located | XREF from pQES magic address in RAM dump |
-| Confidence | 🟡 Alta — located, not yet fully analyzed |
+| Address | Value | Role | XREFs |
+|---------|-------|------|-------|
+| `0x801bfae8` | PTR → `0x80037ae0` | `g_SEQ_DataPtr` — pointer to active SEQ payload | `FUN_80130764` reads at `0x801307ac` |
+| `0x801bfaf0` | `0x00000DF8` (3576) | `g_SEQ_Size` — current SEQ size in bytes | `FUN_8012f3bc`, `FUN_8012f4dc` |
+| `0x801bfaf4` | `0xFFFFFFFF` | `g_SEQ_LoopMarker` — loop/end sentinel | `FUN_8012f3bc`, `FUN_8012f4dc` |
+
+> ⚠️ `0x801bfae8` is **data**, not a function. Earlier notes incorrectly identified it as `SEQ_Player`.
+
+Confirmed SEQ Player: **`FUN_80130764`** ✅
 
 Confirmed audio pipeline:
 ```
-SOUND.CDB → CD_LoadFile → RAM 0x80037ae0 → FUN_801bfae8 (SEQ Player)
+SOUND.CDB → CD_LoadFile → 0x80037ae0 (ptr @ g_SEQ_DataPtr 0x801bfae8) → FUN_80130764 (SEQ_Player)
 ```
 
-> **Next:** Analyze `FUN_801bfae8` in Ghidra to confirm SEQ parsing logic and SPU dispatch.
+> **Next:** Analyze `FUN_80130764` in Ghidra to confirm SEQ parsing logic and SPU dispatch.
 
 ### Sound Tables — `0x8011A164` – `0x8011B07C`
 
@@ -593,7 +601,8 @@ typedef struct {
 |                                       | Option B: pQES interpreter with OpenAL backend |
 |                                       | Option C: pre-render all 95 tracks to OGG (simplest) |
 | XA.MXA streaming (85 MB)             | Decode XA-ADPCM sectors to PCM on the fly → SDL_Mixer / OpenAL streaming buffer |
-| SPU sample banks (VB from MOT.CDB)   | Decode ADPCM blocks → PCM WAV at build time → OpenAL buffers |
+| `MOT.CDB` 670 BIN animations + 8 HMD rigs | Implement MOT animation parser → drive HMD bone transforms per frame |
+| SPU sample banks | Source **unknown** (MOT.CDB is animation data) — locate via SPU RAM dump |
 | ADPCM decode                          | decoder offline; shipar OGG/WAV |
 | SPU reverb                            | OpenAL EFX extension |
 | Rumble via SPU/SIO                    | `SDL_GameController` rumble / `XInputSetState` |
