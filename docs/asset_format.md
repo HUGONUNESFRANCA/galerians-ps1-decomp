@@ -30,7 +30,10 @@ Function: AssetLoader_Init (0x8011ce48)
 - CD_FinishLoad (0x80165528): finalizes loading.
 
 ## CDB Format
-- Container format for multiple PS1 assets (LZSS compressed). Includes TIM and TMD/HMD.
+- Container format for multiple PS1 assets, optionally LZSS-compressed.
+- Header is **8 bytes** (matches what `CD_GetSize` @ `0x8018e1f4` returns); body starts at offset `0x08`.
+- There is **no embedded sub-file table** and **no `decompressed_size` field** — the LZSS stream simply runs to its natural end. Sub-files are located by scanning the decompressed payload for known 4-byte magics on word-aligned offsets.
+- Sub-asset types observed in `MODEL.CDB`: TIM textures + TMD models (+ a few HMD).
 
 ## MODULE.BIN Format
 - Code overlay system loaded to fixed address 0x801AD140. Each area/room has its own code module.
@@ -71,24 +74,71 @@ Buffer sizing:
 
 ## CDB Binary Format (CONFIRMED)
 
-### Header
-- 0x00 (4 bytes): file_size (Total compressed file size)
-- 0x04 (2 bytes): sector_count (CD sectors, e.g., 108 for MODEL.CDB)
-- 0x06 (2 bytes): compression_flags (Low byte: 1=LZSS. High byte: variant/meta)
-- 0x08 (4 bytes): decompressed_size (Target size after LZSS expand, e.g., 14MB)
-- 0x0C (N bytes): sub_file_table (Array of {offset, size} pairs. Count: 1050 for MODEL.CDB)
+### Header — 8 bytes total
 
-### Sub-file Types (detected by magic bytes)
-- 10 00 00 00 : TIM (.tim) - PS1 texture (indexed or RGB16)
-- (to discover) : TMD (.tmd) - PS1 3D model
-- (to discover) : HMD (.hmd) - PS1 hierarchical model
-- (to discover) : VAG (.vag) - PS1 ADPCM audio (in SOUND.CDB)
+| Offset | Size | Field            | Notes                                                                 |
+|--------|------|------------------|-----------------------------------------------------------------------|
+| 0x00   | 4    | `sector_count`   | CD sectors of the *compressed* payload (e.g. `108` for MODEL.CDB).    |
+| 0x04   | 4    | `compression_flag` | `0` = raw, non-zero = LZSS-compressed body. MODEL.CDB = `0x00130001`. |
+| 0x08   | …    | body             | LZSS stream (or raw bytes) until end of file.                         |
+
+> ⚠️ Earlier notes claimed a 12-byte header with `file_size` / `decompressed_size` /
+> embedded `sub_file_table` fields starting at `0x0C`. That layout was wrong:
+> the bytes at `0x08+` are LZSS payload, not a directory. There is no
+> decompressed-size hint in the file — the stream just runs to its natural end.
+
+### Sub-file discovery — magic-byte scan
+
+Sub-files are located by scanning the *decompressed* payload at 4-byte
+alignment for known PS1 asset magics, then slicing between consecutive hits:
+
+| Magic (LE)      | Type | Ext    | Notes                                  |
+|-----------------|------|--------|----------------------------------------|
+| `10 00 00 00`   | TIM  | `.tim` | PS1 texture (4/8/16 bpp).              |
+| `40 00 00 00`   | TMD  | `.tmd` | PS1 model.                             |
+| `41 00 00 00`   | HMD  | `.hmd` | PS1 hierarchical model.                |
+| `41 4C 54 00`   | ALT  | `.alt` | `'ALT\0'` container (not seen in MODEL.CDB). |
+| `56 41 47 70`   | VAG  | `.vag` | `'VAGp'` ADPCM audio (SOUND.CDB).      |
+| `70 51 45 53`   | SEQ  | `.seq` | `'pQES'` PsyQ sequence.                |
+| `00 00 00 00`   | —    | skip   | Padding / empty slot.                  |
 
 ### LZSS Parameters (PS1 variant)
-Window size: 0x1000 bytes (4096). Lookahead: 0x12 bytes (18). Flag byte: 8 bits, MSB first, 1=literal, 0=copy.
-Compression ratio: MODEL.CDB = 3x (4.6MB -> 14MB).
+Window size: `0x1000` bytes (4096). Lookahead: `0x12` bytes (18). Flag byte: 8 bits, **LSB first**, `1`=literal, `0`=back-reference. Back-ref encoding: 12-bit window offset + 4-bit `(length - 3)`.
+Compression ratio: MODEL.CDB ≈ 3.0× (4.6 MB → 13.4 MB).
 
 ### Known CDB Files and Contents
-- MODEL.CDB: Compressed 4.6MB -> Decompressed 14.0MB (1050 Sub-files) - TIM textures + TMD models
-- SOUND.CDB: Compressed 15.9MB - VAG audio samples
-- DISPLAY.CDB: Compressed 2.5MB - TIM UI textures
+
+| File         | Compressed | Decompressed | Sub-files | Composition                  |
+|--------------|-----------:|-------------:|----------:|------------------------------|
+| MODEL.CDB    |    4.6 MB  |     13.4 MB  |    1050   | 366 TIM + 676 TMD + 8 HMD    |
+| SOUND.CDB    |   15.9 MB  |  *(pending)* |  *(pending)* | VAG audio samples         |
+| DISPLAY.CDB  |    2.5 MB  |  *(pending)* |  *(pending)* | TIM UI textures           |
+
+The MODEL.CDB inventory was confirmed by running `tools/cdb_extractor.py`
+against the disk image and tallying magic-byte hits.
+
+**HMD note:** The 8 HMD files almost certainly represent the 8 main characters with
+full skeletal rigs (Rion, Rita, Dorothy, and key NPCs). HMD is the PS1 hierarchical
+model format used specifically for rigged/animated characters, as opposed to TMD
+which is used for static scene geometry.
+
+## PC Port Notes
+
+For a native Windows port, replace the CD access stack with file I/O and pre-extract
+all CDB assets at build time:
+
+| PS1 Layer | PC Replacement |
+|-----------|----------------|
+| `CD_ReadSector` (BIOS Table A [0x27]) | `fread()` from file |
+| `CD_Read` / `CD_LoadFile` | standard file open + read |
+| LZSS decompressor at runtime | pre-extracted assets via `tools/cdb_extractor.py` |
+| `MODEL.CDB` raw binary | `assets/MODEL/*.tmd`, `assets/MODEL/*.tim`, `assets/MODEL/*.hmd` |
+| `SOUND.CDB` raw binary | `assets/SOUND/*.vag` |
+| TMD loader | convert to GLTF or custom binary at build time |
+| TIM textures | convert to PNG/DDS at build time |
+| HMD (8 skeletal characters) | convert to GLTF with skeleton at build time |
+| VAG ADPCM audio | decode to WAV/OGG at build time |
+
+Pre-extraction strategy: run `tools/cdb_extractor.py` on all CDBs once; ship the
+decompressed sub-files. This eliminates the PS1 LZSS decompressor and CD polling
+loop entirely from the port.

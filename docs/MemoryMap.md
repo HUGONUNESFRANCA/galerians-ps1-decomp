@@ -20,6 +20,7 @@ MAPA DE MEMÓRIA GLOBAL
 0x1F8001C8  Scratchpad: SPU DMA    (DAT_801eb558)
 0x1F8001E8  Scratchpad: SPU buffer (DAT_801eb554)
 0x1F800208  Scratchpad: SPU DMA    (DAT_801e2588)
+0x000000A0  BIOS Table A           (CD/hardware; índice 0x27 = CdGetSector — hardware CD access)
 0x80010000  Código do jogo (SLUS_010.99)
 0x8011A14C  s_ModelCDB             ("MODEL.CDB")
 0x8011A158  s_ModuleBin            ("MODULE.BIN")
@@ -582,8 +583,29 @@ typedef struct {
 | `0x8018e1f4` | `CD_GetNextSector`   | ✅ | `CD_GetNextSector(handle, sectors, 1)` — avança para o próximo setor |
 | `0x801855b4` | `malloc`             | ✅ | Alocador interno (PsyQ malloc) |
 | `0x8018e234` | `CD_Read`            | ✅ | `CD_Read(handle, buf, sectors, size)` — lê em chunks de `0x800` bytes |
-| `0x8018ea20` | `CD_ReadSector`      | ✅ | `CD_ReadSector(sectors, buf, size)` — leitor de setor raw |
+| `0x8018ea20` | `CD_ReadSector`      | ✅ | `CD_ReadSector(sectors, buf, size)` — leitor de setor raw; chama BIOS Table A [0x27] (CdGetSector) — nível mais baixo possível de acesso a CD no PS1 |
 | `0x80165528` | `CD_FinishLoad`      | ✅ | Finaliza/aguarda conclusão do load do CD |
+
+### CD Pipeline — 100% MAPPED ✅
+
+Hierarquia completa confirmada (do topo ao hardware):
+
+```
+AssetLoader_Init (0x8011ce48)   — carrega todos os CDBs no startup
+  └→ CD_LoadFile (0x8018e2c4)   — leitura completa + descompressão LZSS
+       └→ CD_Read (0x8018e234)  — loop de chunks de 0x800 bytes
+            └→ CD_ReadSector (0x8018ea20) — wrapper de setor único
+                 └→ BIOS Table A [0x27] = CdGetSector (hardware)
+```
+
+Implementação de `CD_ReadSector` (MIPS):
+```asm
+li  t2, 0xa0   ; base da BIOS Table A
+jr  t2         ; salta para BIOS
+li  t1, 0x27   ; função: CdGetSector
+```
+
+Este é o nível mais baixo possível de acesso ao CD no hardware PS1.
 
 ### Fixed Load Addresses
 
@@ -615,6 +637,21 @@ typedef struct {
 | Address      | Symbol         | Description |
 |--------------|----------------|-------------|
 | `0x80193e08` | `DAT_80193e08` | Flag de disco/versão (controla qual tabela/disco é usado no load) |
+
+### CDB Container Format (confirmado)
+
+Header de **8 bytes** (`CD_GetSize` @ `0x8018e1f4`); o corpo (LZSS ou raw) começa em `+0x08`:
+
+| Offset | Size | Campo               | Notas                                                       |
+|--------|------|---------------------|-------------------------------------------------------------|
+| `0x00` | 4    | `sector_count`      | Setores CD do payload comprimido (ex.: `108` em MODEL.CDB). |
+| `0x04` | 4    | `compression_flag`  | `0` = raw; non-zero = LZSS. MODEL.CDB = `0x00130001`.       |
+| `0x08` | …    | body                | LZSS stream ou bytes raw até o fim do arquivo.              |
+
+> Não existe `decompressed_size` nem tabela de sub-arquivos no header — o stream LZSS roda até o fim natural (~14 MB para MODEL.CDB) e os sub-arquivos são localizados por scan de magic bytes word-aligned no payload decomprimido.
+
+LZSS PS1: window `0x1000`, lookahead `0x12`, flag byte LSB-first (`1`=literal, `0`=back-ref).
+Ferramenta: `tools/cdb_extractor.py` (1050 sub-files extraídos de MODEL.CDB → 366 TIM + 676 TMD + 8 HMD).
 
 ---
 
