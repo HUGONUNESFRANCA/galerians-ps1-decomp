@@ -1,73 +1,124 @@
-# Galerians (PS1) - Reverse Engineering & Decompilation
+# Galerians (PS1) — Reverse Engineering & Decompilation
 
-Um projeto educacional de engenharia reversa focado em entender a arquitetura do PlayStation 1 e a lógica de programação por trás do clássico *Galerians* de 1999.
+## Sobre o Projeto
+Educational reverse engineering of Galerians (PS1, 1999) 
+targeting a native Windows port with enhancements.
+SDK: PsyQ v1.140 (Sony SCEE, January 1998)
+CPU: MIPS R3000A, Little Endian, 32-bit
 
-## 🎯 Sobre o Projeto
+## Status
+WORK IN PROGRESS — Active research phase
 
-Este repositório documenta a desconstrução do jogo *Galerians* (PS1). O objetivo principal não é criar um "port" jogável imediato, mas utilizar este desafio como um laboratório prático e aprofundado para consolidar conceitos de:
+## Ferramentas
+- Ghidra (static analysis + decompilation)
+- DuckStation (emulation + CPU debugger + memory viewer)
+- CDMage (CD image extraction)
+- Claude Code (automation + documentation)
+- Custom Python tools (tools/)
 
-* Arquitetura de Computadores (MIPS R3000A, CPU do PS1).
-* Engenharia Reversa de binários em C e uso de SDKs de época (PsyQ v1.140).
-* Análise de memória, manipulação de ponteiros e arquitetura de *Game Loops* clássicos.
-* Máquinas de estado (*State Machines*) e agendadores de corrotinas (*Coroutines*).
+## Sistemas Mapeados
 
-> **⚠️ Aviso Legal (Disclaimer):** Este projeto tem fins estritamente educacionais e de pesquisa. Nenhum arquivo original do jogo (ROM, BIN, CUE, ISO), código proprietário vazado ou asset protegido por direitos autorais (áudio, texturas, modelos 3D) é fornecido neste repositório. Para utilizar as ferramentas ou testar o código aqui presente, é necessário possuir uma cópia legal e original do jogo.
+### ✅ Game Loop & Scheduler (100%)
+- Game loop at 0x80185170 — cooperative coroutine scheduler
+- 16 slots × 7 coroutines = 112 simultaneous coroutines max
+- VSync at 0x8017e0fc — frame pacing (30fps logic / 60fps video)
+- Full coroutine context save/restore confirmed
 
-## ⚙️ Ficha Técnica do Alvo
-* **Plataforma:** PlayStation 1
-* **SDK Original:** PsyQ v1.140 — Sony SCEE (Compilado em 12/01/1998)
-* **Arquitetura:** MIPS R3000A (Little Endian, 32-bit)
-* **RAM:** 0x80000000 – 0x801FFFFF (2MB)
+### ✅ Input System (100%)
+- Controller base: 0x801AC900, stride 0x40 per port
+- Digital (type 4) and DualShock analog (type 7) fully mapped
+- All button bitmasks, analog thresholds, rumble system documented
+- DualShock rumble via SPU: SetRumble (0x80182bdc)
 
-## 🛠️ Ferramentas Utilizadas
+### ✅ Camera System (100%)
+- Camera table: 0x801C3200 (pre-defined angles per room)
+- Active camera matrix: 0x801BFD10 (updates during movement)
+- Camera_LoadToGTE (0x80187320) — copies 32 bytes to GTE scratchpad
+- Camera_RecordFrame (0x80187350) — circular frame history buffer
+- Camera_Manager (0x8013b584) — resets 4 camera slots (stride 0xC60)
+- Freecam implementation path: intercept Camera_LoadToGTE
 
-O fluxo de trabalho combina análise estática e depuração dinâmica profunda:
-* **Ghidra:** Para a análise estática, mapeamento de ponteiros e descompilação dos executáveis do PS1 gerando código em C.
-* **DuckStation:** Emulador focado em precisão, utilizado com seu *CPU Debugger* interno para *Watchpoints*, *Breakpoints* de execução e *Dumps* de memória RAM.
-* **CDMage:** Para extração e manipulação dos setores dos arquivos de imagem do CD original.
+### ✅ Engine Init & Scratchpad (100%)
+- Engine_Init at 0x80187df4 — zeros scratchpad, maps all subsystems
+- Full 1KB scratchpad layout documented (0x1F800000)
+- Native resolution: 320×240 confirmed (g_ScreenWidth/Height)
+- Widescreen: change 0x80193E30/E34 before Engine_Init
 
-## 🗺️ Mapeamento de Memória (Destaques)
+### ✅ Combat & Death System (100%)
+- Rion stats: GlobalCombatState at 0x801C2F9C
+- Full death chain: damage → GameOver → death counter
+- AP critical threshold: 17 (Shorting/Addiction mechanic)
+- g_DeathCount at 0x801CB3C0
 
-Abaixo estão algumas das principais estruturas já mapeadas na RAM do console. Para o mapeamento completo e offsets detalhados, consulte a documentação em `docs/MemoryMap.md`.
+### ✅ Audio System (100%)
+- 95 SEQ files (pQES/MIDI format) in SOUND.CDB (raw, no compression)
+- MIDI commands: 0xB0 (BGM), 0xB2 (SFX)
+- SPU voice table: 0x801bfa30, stride 0x1C, 24 voices max
+- SPU Sound RAM limit: 0x19000 bytes (102KB)
+- XA streaming states: Sleep→Ready→XaSeek→XaWaitPly→XaPlaying
+- Full voice pipeline: Sound_GetEntry→SEQ_MIDIVoiceAlloc→SPU_VoiceUpdate
 
-| Endereço (RAM) | Tamanho | Estrutura | Descrição |
-| :--- | :--- | :--- | :--- |
-| `0x801AC8D8` | - | `EngineState` | Struct Mestre da Engine. Gerencia ponteiros globais de estado. |
-| `0x801C2F9C` | 14 bytes | `GlobalCombatState` | Status do Rion. Contém HP (`int16`), AP (`int16`) e nível de *Shorting*. |
-| `0x801AC900` | 16x 0x40 | `ControllerChannel` | Array de portas de controle. Mapeia botões digitais, DualShock e *Rumble*. |
-| `0x801D2198` | 112 slots| `CoroutineContext` | Pool do *Scheduler*. Gerencia o tempo de vida e *Yields* da lógica do jogo. |
-| `0x80193358` | Buffer | `OrderingTable` | Fila de renderização principal (Buffer 0) enviada para a GPU. |
+### ✅ Asset Loading & CD Pipeline (100%)
+- CD pipeline: AssetLoader_Init→CD_LoadFile→CD_Read→CD_ReadSector→BIOS A(0x27)
+- BIOS CdGetSector confirmed at hardware level
+- ISO9660 path format: \T4\FILENAME.EXT;1
+- MODULE.BIN always loaded first to 0x801AD140
 
-## 🗓️ Roadmap do Projeto
+### ✅ CDB Asset Format (100%)
+- 8-byte header: {sector_count, compression_flag}
+- LZSS compression (window 0x1000, lookahead 0x12)
+- MODEL.CDB: 676 TMD + 366 TIM + 8 HMD = 1050 assets (4.6MB→14MB)
+- SOUND.CDB: 95 SEQ files, raw (no compression), 15.9MB
+- MOT.CDB:  670 BIN animations + 8 HMD rigs + 196 TMD/TIM (1.5MB→4.1MB)
+- CDB extractor tool: tools/cdb_extractor.py
 
-### Fase 1 — Mapeamento Estrutural (Em Andamento)
-- [x] Game Loop / Scheduler
-- [x] Sistema de Combate
-- [x] Sistema de Input
-- [x] Sistema de Corrotinas
-- [x] Renderer (parcial)
-- [ ] Sistema de Câmera
-- [ ] Sistema de Áudio
-- [ ] Sistema de FMV/MDEC
-- [ ] Overlays de mapa/área
+### 🔄 Renderer (Partial — ~70%)
+- PsyQ SDK v1.140 confirmed
+- Ordering Table: 0x80193358–0x80193888 (double buffer)
+- GTE screen center: GTE_SetScreenCenter (0x8018c008)
+- Renderer vtable: 0x8019b4c8 (DrawSync at +0x3C)
+- Texture loading: Texture_Load (0x8017d150), formats 4/8/16bpp
+- Missing: DrawOTag, ClearOTag, display flip, primitive types
 
-### Fase 2 — Port Base (C Puro)
-- [ ] Substituir VSync do PS1 por timer nativo de OS (ex: *QueryPerformanceCounter*).
-- [ ] Substituir *DrawOTag* por renderizador moderno (OpenGL/Vulkan).
-- [ ] Substituir *LoadImage* por chamadas de carregamento de texturas (ex: *glTexImage2D*).
-- [ ] Substituir hardware de input do PS1 por bibliotecas modernas.
+### ❌ FMV/MDEC System (0%)
+- XA.MXA: 85MB streaming file identified
+- MOV/ and MOV_D/ folders found on CD
+- Implementation not yet started
 
-### Fase 3 — Melhorias Opcionais
-- [ ] FPS desbloqueado (separar update/render com acumulador de tempo).
-- [ ] Resolução aumentada nativamente (framebuffer escalado).
-- [ ] Suporte a Texturas HD.
-- [ ] Ajuste para Widescreen (FOV horizontal expandido).
+### ❌ Map/Area Overlays (0%)
+- MODULE.BIN loads to 0x801AD140
+- Header: {0x01, "\T4\MODULE.BIN;1"}
+- Overlay switching mechanism not yet mapped
 
-## 📁 Estrutura do Repositório
-
-```text
+## Estrutura do Repositório
 galerians-ps1-decomp/
-├── docs/           # Mapas de memória, tabelas de offsets e documentação da PsyQ
-├── src/            # Código C puro reconstruído a partir da descompilação
-├── tools/          # Scripts criados para extração e automação
-└── README.md       # Este arquivo
+├── docs/
+│   ├── memory_map.md      # Complete address reference
+│   └── asset_format.md    # CDB format, audio, animation
+├── include/
+│   ├── engine_state.h     # EngineState struct
+│   ├── state_machine.h    # Scheduler & coroutines
+│   ├── input.h            # Controller system
+│   ├── camera.h           # Camera system
+│   ├── audio.h            # SPU & SEQ system
+│   ├── renderer.h         # GPU & PsyQ rendering
+│   ├── coroutine.h        # Coroutine context layout
+│   ├── gte.h              # GTE coprocessor
+│   ├── rion_stats.h       # Combat stats
+│   ├── entity.h           # Entity base struct
+│   └── ghidra_types.h     # Type mappings
+├── src/
+│   ├── game_loop.c        # Scheduler implementation
+│   ├── combat_state.c     # Combat state machine
+│   ├── damage_calc.c      # Damage formula
+│   ├── camera.c           # Camera system
+│   ├── audio.c            # Audio pipeline
+│   └── coroutine.c        # Coroutine system
+└── tools/
+├── cdb_extractor.py   # CDB extraction + LZSS decompress
+├── camera_search.py   # RAM scanner for camera structs
+└── audio_search.py    # RAM scanner for audio data
+
+## Aviso Legal
+Educational project. No game files included.
+Requires a legal copy of Galerians (PS1) to use these tools.
