@@ -97,6 +97,10 @@ Galerians uses the PsyQ SEQ + SPU bank system rather than raw VAG samples:
 SEQ files drive the SPU hardware with precise timing; they reference sample data
 held in a separate SPU bank (not embedded in SOUND.CDB).
 
+**SEQ MIDI command bytes:** `0xB0` (BGM channel 0), `0xB2` (SFX channel 2).
+pQES format confirmed as MIDI-compatible with Control Change events.
+Voice allocation: up to `0x19000` bytes SPU Sound RAM per session.
+
 ### SPU Sample Banks — NOT in SOUND.CDB
 
 | Candidate | Size | Likely role |

@@ -24,12 +24,10 @@ CPU: MIPS R3000A, Little Endian.
 - Confiança: ✅ Confirmado / 🟡 Alta / 🟠 Média / 🔴 Baixa
 
 ## Próximas Tarefas
-- Priority 1: Analyze FUN_80130764 in Ghidra (confirmed SEQ Player)
-- Priority 2: Find MOT binary format magic — search Ghidra for code that reads 0x80037ae0 area or MOT.CDB data
-- Priority 3: Identify the 8 HMD character names (slots 0-7 in MODEL.CDB / MOT.CDB)
-- Priority 4: Check XA.MXA structure for XA sector headers
-- Priority 5: Analyze FUN_8011d198 (Sound Manager) - paste pseudo-C
-- Priority 6: Analyze FUN_8018669c (Frame_First after Engine_Init)
+- Priority 1: Map XA state machine function at 0x801acae0
+- Priority 2: Find SEQ note parser (reads 0x80037ae0 pQES data)
+- Priority 3: Identify the 8 HMD character names from DuckStation
+- Priority 4: Analyze FUN_8018669c (Frame_First after Engine_Init)
 - Priority: Implement GTE_H (COP2 0xE800) adjustment for true widescreen FOV to prevent 16:9 stretching.
 - Mapear gap da EngineState (0x801ACB66 – 0x801AE158)
 - Identificar slot de gameplay na state machine

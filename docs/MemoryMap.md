@@ -612,6 +612,95 @@ typedef struct {
 
 ---
 
+## Audio System (COMPLETE)
+
+### Functions
+| Address | Name | Description |
+|---------|------|-------------|
+| `0x8012ee60` | `SEQ_MIDIVoiceAlloc(param_1, param_2, midi_cmd, voice_table, spu_ptr)` | Processes MIDI Control Change events (0xB0, 0xB2). Allocates SPU voice channels, stride 0x1C per voice entry. SPU Sound RAM limit: 0x19000 bytes (102,400 bytes ≈ 100 KB). Retry logic: up to 3 attempts per voice allocation. |
+| `0x8012f3bc` | `Sound_GetEntry(param1, sound_index, param3)` | Returns ptr to `g_VoiceTable + g_VoiceIndex * 0x1C`. Uses `CDB_GetAsset` to load sound data from CDB. |
+| `0x80130764` | `SPU_VoiceUpdate()` | Per-frame: processes pending KeyOn/KeyOff/Pitch for all voices. Reads g_VoiceTable entries, calls SPU_StopVoice/SetPitch/KeyOn. |
+| `0x8011c454` | `CDB_GetAsset(cdb_handle, asset_index, out_ptr)` | Universal asset getter — 20+ callers. Dispatches to mode A or B reader. Mode selected by FUN_80126ce0() (region/disc check). FUN_8011c1a4 = CDB_GetAsset_ModeA, FUN_8011c2a4 = CDB_GetAsset_ModeB. |
+| `0x8016d1cc` | `SPU_StopVoice(channel)` | Called by SPU_VoiceUpdate. |
+| `0x8016c210` | `SPU_SetPitch(pitch)` | Called by SPU_VoiceUpdate. |
+| `0x801682ac` | `SPU_KeyOn(pitch)` | Called by SPU_VoiceUpdate. |
+| `0x8012ecb8` | `SPU_AllocChannel(...)` | Called by SEQ_MIDIVoiceAlloc. |
+| `0x8012ee04` | `SPU_CalcEnvelope(...)` | Called by SEQ_MIDIVoiceAlloc. |
+
+### Globals
+| Address | Symbol | Description |
+|---------|--------|-------------|
+| `0x801bfa30` | `g_VoiceTable` | SPU voice entries, stride 0x1C (28 bytes) |
+| `0x80191e88` | `g_VoiceIndex` | current voice slot index (short) |
+| `0x80191e8c` | `g_SPURamPtr` | current write position in SPU Sound RAM |
+| `0x80191e90` | `g_MaxVoiceCount` | maximum voice count (short) |
+| `0x801bfc90` | `g_ActiveVoiceCount` | voices being processed this frame |
+| `0x801bfbe8` | `g_VoiceTablePtr` | pointer to active voice table |
+| `0x801bfaf0` | `g_SEQSize` | size of active SEQ in bytes (0xDF8 = 3576) |
+| `0x801bfaf4` | `g_SEQLoopMarker` | 0xFFFFFFFF = loop/end sentinel |
+| `0x801bfbd4` | `g_LastBGMVoice` | last BGM voice channel index |
+| `0x801bf7dc` | `g_VoiceSlot` | current voice slot being allocated |
+| `0x801bfae8` | `g_SEQPtr` | pointer to active SEQ data in RAM (→ 0x80037ae0) |
+| `0x80037ae0` | `g_SEQData` | active SEQ file (pQES, 3576 bytes) |
+
+### Voice Entry Layout (0x1C bytes, at g_VoiceTable + index × 0x1C)
+
+| Offset | Type | Field | Notes |
+|--------|------|-------|-------|
+| `+0x00` | `short` | `midi_cmd` | MIDI command byte (0xB0 or 0xB2) |
+| `+0x02` | `short` | `spu_channel` | SPU voice channel number |
+| `+0x04` | `uint32` | `sample_ptr` | pointer to sample data |
+| `+0x08` | `uint32` | `spu_addr` | address in SPU Sound RAM |
+| `+0x0C` | `uint32` | `envelope_params` | ADSR envelope settings |
+| `+0x10` | `int` | `active_flag` | 0=stopped, non-zero=playing |
+| `+0x12` | `short` | `pad` | |
+| `+0x14` | `short` | `pitch_value` | SPU pitch register value |
+| `+0x16` | `short` | `trigger_flag` | >=0 = KeyOn pending |
+| `+0x18` | `uint32` | `loop_addr` | loop point address in SPU Sound RAM |
+| `+0x1A` | `short` | `pad2` | |
+
+### XA Streaming State Machine
+Location: `0x801acae0` area
+
+| State | Address | Description |
+|-------|---------|-------------|
+| `"PAUSE"` | `0x801acb00` | CD drive paused |
+| `"PLAY"` | `0x801acb08` | CD drive playing |
+| `"READY"` | `0x801acb10` | CD drive ready |
+| `"SLEEP"` | `0x801acb18` | CD drive sleeping |
+| `"Sleep"` | `0x801c148` | XA audio sleeping |
+| `"Ready"` | `0x801c13c` | XA audio ready |
+| `"XaSeek"` | `0x801c130` | seeking XA sector on CD |
+| `"XaWaitPly"` | `0x801c124` | waiting for XA playback start |
+| `"XaPlaying"` | `0x801c118` | XA stream active (music playing) |
+| `"Muting"` | `0x801c10c` | muting audio |
+| `"Pausing"` | `0x801c100` | pausing audio |
+
+Pipeline: `Sleep → Ready → XaSeek → XaWaitPly → XaPlaying`
+
+### MIDI Commands Used
+- `0xB0` = MIDI Control Change channel 0 (BGM)
+- `0xB2` = MIDI Control Change channel 2 (SFX/voice)
+
+### Audio Asset Locations in RAM
+- SEQ data: `0x80037ae0` (active sequencer, pQES format)
+- Sound RAM: SPU internal (0x1F800000 range, 512 KB hardware)
+- SPU RAM limit used: `0x19000` bytes (102 KB of 512 KB)
+
+### Port Replacement Plan (PC)
+
+| PS1 | PC Replacement |
+|-----|----------------|
+| SEQ (pQES MIDI) | FluidSynth or pre-rendered OGG tracks |
+| SPU voice alloc | OpenAL `alGenSources` (24 voices max) |
+| `SPU_KeyOn` | `alSourcePlay` |
+| `SPU_SetPitch` | `alSourcef(AL_PITCH, value/0x1000)` |
+| `SPU_StopVoice` | `alSourceStop` |
+| XA streaming | SDL_Mixer music with XA-ADPCM decode |
+| Sound RAM | OpenAL buffer pool (malloc 100 KB equivalent) |
+
+---
+
 ## 💾 Asset Loading
 
 ### Confirmed Functions
