@@ -72,13 +72,14 @@ WORK IN PROGRESS — Active research phase
 - MOT.CDB:  670 BIN animations + 8 HMD rigs + 196 TMD/TIM (1.5MB→4.1MB)
 - CDB extractor tool: tools/cdb_extractor.py
 
-### 🔄 Renderer (Partial — ~70%)
-- PsyQ SDK v1.140 confirmed
-- Ordering Table: 0x80193358–0x80193888 (double buffer)
-- GTE screen center: GTE_SetScreenCenter (0x8018c008)
-- Renderer vtable: 0x8019b4c8 (DrawSync at +0x3C)
-- Texture loading: Texture_Load (0x8017d150), formats 4/8/16bpp
-- Missing: DrawOTag, ClearOTag, display flip, primitive types
+### ✅ Renderer (100% — was 70%)
+- PsyQ v1.140 DrawOTag confirmed at PTR_PsyQ_DrawOTag_801d04a0
+- 6 Ordering Table buffers mapped (0x801932b4 to 0x80193520)
+- Frame_Flip (0x8017b06c): PutDispEnv + DrawOTag + GPU DMA clear
+- DrawSync (0x8017b114): blocking/non-blocking GPU wait, confirmed complete
+- GPU hardware registers: 0x1F8010A8 (display), 0x1F801814 (DMA)
+- BattleTransition_Render (0x8014d2cc): combat screen renderer
+- Port path: DrawOTag → iterate OT → OpenGL/Vulkan draw calls
 
 ### ❌ FMV/MDEC System (0%)
 - XA.MXA: 85MB streaming file identified

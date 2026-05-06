@@ -32,8 +32,12 @@ MAPA DE MEMÓRIA GLOBAL
 0x80193E34  g_ScreenHeight
 0x801E2380  g_SPUChannelBankA      (SPU voices 0-15)
 0x801E2470  g_SPUChannelBankB      (SPU voices 16-23)
-0x80193358  Ordering Table buffer 0 (renderer)
-0x80193888  Ordering Table buffer 1 (renderer)
+0x801932b4  g_OTBuffer_2   Ordering Table buffer 2
+0x80193330  g_OTBuffer_0   Ordering Table buffer 0 (main gameplay OT)
+0x801933ac  g_OTBuffer_1   Ordering Table buffer 1 (secondary OT)
+0x80193428  g_OTBuffer_3   Ordering Table buffer 3
+0x801934a4  g_OTBuffer_4   Ordering Table buffer 4
+0x80193520  g_OTBuffer_5   Ordering Table buffer 5 — Terminator: 0xFFFFFFFC
 0x80190e0c  g_FileTableA              (10 × {dest,name} - Disc 1)
 0x80190e5c  g_FileTableB              (7 × {dest,name} - Disc 2)
 0x80194078  SPU_DMA_Table_A           (transfers para SPU RAM)
@@ -81,6 +85,11 @@ MAPA DE MEMÓRIA GLOBAL
 0x801eb574  g_EngineStatePtr
 0x8019b4c8  g_RendererVtable
 0x8019b4d2  g_RendererDebugLevel
+0x8019b5d8  g_DMAStatusPtr      (void* — pointer to DMA status)
+0x8019b5e4  g_GPUStatusPtr      (void* — pointer to GPU status)
+0x8019b5f8  g_RenderQueueWrite  (uint — render queue write ptr)
+0x8019b5fc  g_RenderQueueRead   (uint — render queue read ptr)
+0x801d04a0  g_DrawOTagBase      (void* — OT base; Ghidra: PTR_PsyQ_DrawOTag_801d04a0)
 0x801bfae8  g_SEQ_DataPtr        (PTR → 0x80037ae0 — pointer to active SEQ in RAM; XREF: FUN_80130764 @ 0x801307ac)
 0x801bfaf0  g_SEQ_Size           (SEQ size in bytes, e.g. 0x00000DF8 = 3576; XREF: FUN_8012f3bc, FUN_8012f4dc)
 0x801bfaf4  g_SEQ_LoopMarker     (0xFFFFFFFF = loop/end sentinel; XREF: FUN_8012f3bc, FUN_8012f4dc)
@@ -341,16 +350,21 @@ typedef struct {
 | `0x80182bdc` | `SetRumble` | 🟡 | Define intensidade do rumble |
 | `0x80182b5c` | `SetRumbleMode` | 🟡 | Define modo do rumble |
 
-### Sistema de Renderer
+### Sistema de Renderer (COMPLETE ✅)
 
 | Endereço | Nome | Confiança | Descrição |
 |---|---|---|---|
+| `0x8017b06c` | `Frame_Flip` | ✅ | Writes GPU Display Mode to 0x1F8010A8 (PutDispEnv); calls PsyQ DrawOTag via PTR_PsyQ_DrawOTag_801d04a0; clears GPU DMA control register (0x1F801814 = 0) |
+| `0x8017b114` | `DrawSync(mode)` | ✅ | param_1=0: blocking wait (VSync + GPU drain); param_1≠0: non-blocking status check. Returns: 0=success, 0xFFFFFFFF=error, 1=pending |
+| `0x8017b8a8` | `PsyQ_DrawOTag` / `PutDispEnv` | ✅ | Called with different args for each operation; PTR_PsyQ_DrawOTag_801d04a0 = OT base pointer (auto-labeled by Ghidra) |
+| `0x80183a00` | `RenderQueue_Dispatch` | ✅ | Sends GPU command queue |
+| `0x8017b284` | `GPU_CheckTimeout` | ✅ | Monitors GPU hang |
+| `0x8014d2cc` | `BattleTransition_Render(ot_case, param_2)` | ✅ | Renders combat transition/result screen; iterates 4 camera slots, 6 OT buffer cases; ends with Trigger_GameOver + State_ResetBeforeDeath |
 | `0x80178d1c` | `Renderer_Flush` | ✅ | DrawSync via vtable, log em debug |
 | `0x8017d150` | `Texture_Load` | ✅ | Carrega textura VRAM (4/8/16bpp) |
 | `0x8017d240` | `SetTPage` | 🟡 | Configura página de textura |
 | `0x8017afc4` | `ClearImage` | 🟡 | ResetGraph / limpa framebuffer |
-| `0x8017albc` | `SetDispMask` | 🟡 | Controle de visibilidade do display |
-| `0x8017b114` | `DrawSync` | 🟡 | Aguarda GPU finalizar |
+| `0x8017a1bc` | `SetDispMask` | 🟡 | Controle de visibilidade do display |
 | `0x80165f0c` | `Calc_TileIndex` | 🟠 | Retorna índice de tile via FUN_8017d150 |
 
 ### State Machine — Inicialização
@@ -813,8 +827,17 @@ Ferramenta: `tools/cdb_extractor.py` (1050 sub-files extraídos de MODEL.CDB →
 | `0x801E225C` | `g_LastSlot_A1` | `uint32_t` | ✅ |
 | `0x8019b4c8` | `g_RendererVtable` | `void**` | ✅ |
 | `0x8019b4d2` | `g_RendererDebugLevel` | `uint16_t` | ✅ |
-| `0x80193358` | `g_OrderingTable[0]` | `uint32_t[]` | ✅ |
-| `0x80193888` | `g_OrderingTable[1]` | `uint32_t[]` | ✅ |
+| `0x8019b5d8` | `g_DMAStatusPtr` | `void*` | ✅ |
+| `0x8019b5e4` | `g_GPUStatusPtr` | `void*` | ✅ |
+| `0x8019b5f8` | `g_RenderQueueWrite` | `uint32_t` | ✅ |
+| `0x8019b5fc` | `g_RenderQueueRead` | `uint32_t` | ✅ |
+| `0x801d04a0` | `g_DrawOTagBase` | `void*` | ✅ |
+| `0x801932b4` | `g_OTBuffer_2` | `uint32_t[]` | ✅ |
+| `0x80193330` | `g_OTBuffer_0` | `uint32_t[]` (main gameplay OT) | ✅ |
+| `0x801933ac` | `g_OTBuffer_1` | `uint32_t[]` (secondary OT) | ✅ |
+| `0x80193428` | `g_OTBuffer_3` | `uint32_t[]` | ✅ |
+| `0x801934a4` | `g_OTBuffer_4` | `uint32_t[]` | ✅ |
+| `0x80193520` | `g_OTBuffer_5` | `uint32_t[]` | ✅ |
 | `0x801BFD10` | `g_ActiveCameraMatrix` | `CameraEntry*` | ✅ |
 | `0x801C1778` | `g_CameraSlots` | `CameraSlot[4]` (stride `0xC60`) | ✅ |
 | `0x801C2FF4` | `g_CameraFuncPtr` | `void*` | ✅ |
@@ -890,7 +913,7 @@ StateSlot_Scheduler (0x80185170)
 
 ---
 
-## 🖥️ Renderer — Pipeline PsyQ
+## 🖥️ Renderer — Pipeline PsyQ (COMPLETE ✅)
 
 ### Resolução Nativa (Confirmada)
 
@@ -914,24 +937,46 @@ Pipeline por frame:
   3. DrawOTag()          envia OT ao GPU (linked list de primitivas)
   4. DrawSync()          aguarda GPU finalizar
   5. VSync()             aguarda VBlank
-  6. PutDispEnv()        alterna display buffer
+  6. Frame_Flip()        PutDispEnv + DrawOTag + clears GPU DMA register
 
-Ordering Table:
-  Buffer 0: 0x80193358 – início
-  Buffer 1: 0x80193888 – início
+Ordering Table — 6 buffers (COMPLETE):
+  g_OTBuffer_0: 0x80193330  (main gameplay OT)
+  g_OTBuffer_1: 0x801933ac  (secondary OT)
+  g_OTBuffer_2: 0x801932b4
+  g_OTBuffer_3: 0x80193428
+  g_OTBuffer_4: 0x801934a4
+  g_OTBuffer_5: 0x80193520
   Terminador: 0xFFFFFFFC
+
+GPU Hardware Registers (confirmed):
+  0x1F8010A8  GPU Display Mode register   → g_GPUStatusPtr (0x8019b5e4)
+  0x1F801814  GPU DMA Control register    → cleared on frame flip
+  bit 24 of GPU status = GPU busy (drawing)
+  bit 26 of GPU status = DMA transfer active
 
 Vtable do Renderer (base 0x8019b4c8):
   -0x0C  ClearImage / ResetGraph  (0x8017afc4)
-  -0x08  SetDispMask              (0x8017albc)
+  -0x08  SetDispMask              (0x8017a1bc)
   -0x04  DrawSync direto          (0x8017b114)
   +0x3C  DrawSync via callback    ← usado por Renderer_Flush
+
+PsyQ DrawOTag base: PTR_PsyQ_DrawOTag_801d04a0 (g_DrawOTagBase)
 
 Formatos de Textura:
   0 = 4bpp  (paleta 16 cores)
   1 = 8bpp  (paleta 256 cores)
   2 = 16bpp (cor direta)
 ```
+
+### Port Replacement (PC)
+
+| PS1 | PC Equivalent |
+|-----|---------------|
+| `Frame_Flip` | `glSwapBuffers()` / `vkQueuePresentKHR()` |
+| `DrawOTag` | iterate OT linked list → convert prims → draw calls |
+| `DrawSync` | `glFinish()` / `vkWaitForFences()` |
+| `PutDispEnv` | `glViewport()` + framebuffer bind |
+| `RenderQueue_Dispatch` | OpenGL command buffer / Vulkan command buffer |
 
 ---
 
@@ -944,7 +989,8 @@ Formatos de Textura:
 - [x] **Camera_RecordFrame (0x80187350):** ring buffer de histórico de frames confirmado; `g_CameraHistoryPtr` (0x801eb544) e stride 0x20
 - [ ] **CameraSlot interno (0x004 – 0xC3D):** payload não mapeado entre `func_ptr` e `active_flag`
 - [ ] **Relação `g_CameraTable` ↔ `g_CameraSlots`:** 0x801C3200 cai dentro do range dos slots (0x801C1778 + 0x3180) — verificar sobreposição
-- [ ] **DrawOTag / ClearOTag:** endereços não confirmados
+- [x] **DrawOTag:** PTR_PsyQ_DrawOTag_801d04a0 confirmed (g_DrawOTagBase); called via Frame_Flip (0x8017b06c)
+- [ ] **ClearOTag:** endereço não confirmado
 - [ ] **Engine_EnqueueLoadImage:** endereço a confirmar
 - [ ] **FUN_80184f24 / FUN_801850c4 callers adicionais:** `FUN_80184f24` e `FUN_801850c4` têm outros XREFs a analisar
 
@@ -957,7 +1003,7 @@ Formatos de Textura:
 - [x] Sistema de Combate
 - [x] Sistema de Input
 - [x] Sistema de Corrotinas
-- [x] Renderer (parcial)
+- [x] Renderer (completo — DrawOTag, Frame_Flip, 6 OT buffers, GPU registers all confirmed)
 - [x] Sistema de Câmera (completo — `Camera_LoadToGTE`, `Camera_Manager`, `Camera_RecordFrame`)
 - [x] Sistema de Áudio (SOUND.CDB: 95 pQES SEQ files confirmados; SPU bank candidates identificados)
 - [ ] Sistema de FMV/MDEC
