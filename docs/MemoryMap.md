@@ -1068,6 +1068,46 @@ Formatos de Textura:
 
 ---
 
+## 🔄 Map/Area Overlays (In Progress — ~30%)
+
+### MODULE.BIN Behavior (CONFIRMED ✅)
+
+| Property | Value |
+|----------|-------|
+| Load address | `0x801AD140` |
+| Load time | Once at startup via `AssetLoader_Init` (`0x8011ce48`) |
+| Size | 2.4 MB monolithic code module |
+| Contents | ALL area-specific code (does NOT reload on area change) |
+| Header | `{0x01, "\T4\MODULE.BIN;1"}` — static, never changes |
+
+`AssetLoader_Init` (`0x8011ce48`) loads **all** CDB files at startup. There is no per-area reloading:
+- `MODULE.BIN` is loaded once to `0x801AD140` and stays resident in RAM permanently
+- `MODEL.CDB`, `SOUND.CDB`, `DISPLAY.CDB`, `MENU.CDB`, `ITEMTIM.CDB` are all loaded once at boot
+
+### Area Switching Mechanism (HYPOTHESIS 🟡 — to confirm)
+
+The current hypothesis based on the scheduler and STATE machine architecture:
+
+1. **`StateSlot_Allocate` (`0x8016019c`)** creates a new slot for each area transition
+2. The slot's **function pointer** points into `MODULE.BIN` at an area-specific offset within `0x801AD140+`
+3. Area-specific assets (backgrounds) are likely loaded via **BGTIM streaming** from one of 4 BGTIM CDB files:
+   - `BGTIM_A.CDB` — area group A (e.g. hospital)
+   - `BGTIM_B.CDB` — area group B (e.g. rooftop)
+   - `BGTIM_C.CDB` — area group C (e.g. lab)
+   - `BGTIM_D.CDB` — area group D
+4. 4 BGTIM files ↔ 4 area groups suggests a **jump table** inside MODULE.BIN indexed by area group
+
+### To Investigate
+
+```
+- Breakpoint on StateSlot_Allocate (0x8016019c) during room transitions
+- Find area jump table inside MODULE.BIN at 0x801AD140+
+- Determine how BGTIM_A/B/C/D are selected per area group
+- Confirm which BGTIM is streamed vs preloaded
+```
+
+---
+
 ## 🚧 Questões Abertas
 
 - [ ] **Relação HP:** `EngineState.rion_hp_mirror` vs `GlobalCombatState->hp` — são o mesmo dado ou cópias sincronizadas?
@@ -1095,7 +1135,7 @@ Formatos de Textura:
 - [x] Sistema de Câmera (completo — `Camera_LoadToGTE`, `Camera_Manager`, `Camera_RecordFrame`)
 - [x] Sistema de Áudio (SOUND.CDB: 95 pQES SEQ files confirmados; SPU bank candidates identificados)
 - [x] Sistema de FMV/MDEC (90% — MDEC registers, DMA config, status polling all mapped)
-- [ ] Overlays de mapa/área
+- [~] Overlays de mapa/área (~30% — MODULE.BIN behavior confirmed; area switching mechanism hypothesis pending validation)
 
 ### Fase 2 — Port Base
 - [ ] Substituir VSync por timer Windows (QueryPerformanceCounter)
