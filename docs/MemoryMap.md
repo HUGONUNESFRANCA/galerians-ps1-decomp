@@ -101,6 +101,24 @@ MAPA DE MEMÓRIA GLOBAL
 0x801eb544  g_CameraHistoryPtr   (ptr para ring buffer de histórico; +2 = frame_index int16)
 0x801eb560  g_CameraBuffer       (uint32[8] — fonte do upload GTE)
 0x1F800168  GTE scratchpad       (destino de Camera_LoadToGTE)
+0x801ac9b8  g_DispEnv_0         PsyQ DISPENV buffer 0 (Display_InitBuffers)
+0x801aca14  g_DrawEnv_0         PsyQ DRAWENV buffer 0
+0x801aca30  g_DispEnv_1         PsyQ DISPENV buffer 1
+0x801aca8c  g_DrawEnv_1         PsyQ DRAWENV buffer 1
+0x801acab8  g_DrawEnvActive     active DrawEnv pointer
+0x80193e20  g_DispX0            display buffer 0 X
+0x80193e24  g_DispX1            display buffer 1 X
+0x80193e28  g_DispY0            display buffer 0 Y
+0x80193e2c  g_DispY1            display buffer 1 Y
+0x80193e38  g_DrawHeight        draw area height
+0x80193e3c  g_DrawWidth         draw area width
+0x8019b760  DAT_8019b760 → DMA0_MADR     (0x1F801080; MDEC-in source addr)
+0x8019b764  DAT_8019b764 → DMA0_BCR      (0x1F801084; block count/size)
+0x8019b768  DAT_8019b768 → DMA0_CHCR     (0x1F801088; start DMA to MDEC)
+0x8019b76c  DAT_8019b76c → DMA1_MADR     (0x1F801090; MDEC-out destination)
+0x8019b790  DAT_8019b790 → MDEC_CMD_DATA (0x1F801820; MDEC command/data)
+0x8019b794  DAT_8019b794 → MDEC_STATUS   (0x1F801824; bit 29 = busy)
+0x8019b798  DAT_8019b798 → DMA_DPCR      (0x1F8010F0; channel priority/enable)
 ──────────────────────────────────────────────────────────────
 ```
 
@@ -366,6 +384,8 @@ typedef struct {
 | `0x8017afc4` | `ClearImage` | 🟡 | ResetGraph / limpa framebuffer |
 | `0x8017a1bc` | `SetDispMask` | 🟡 | Controle de visibilidade do display |
 | `0x80165f0c` | `Calc_TileIndex` | 🟠 | Retorna índice de tile via FUN_8017d150 |
+| `0x8018d4d8` | `PsyQ_SetDispEnv` | ✅ | Sets PsyQ DISPENV (display environment) |
+| `0x8018d598` | `PsyQ_SetDrawEnv` | ✅ | Sets PsyQ DRAWENV (drawing environment) |
 
 ### State Machine — Inicialização
 
@@ -715,6 +735,56 @@ Pipeline: `Sleep → Ready → XaSeek → XaWaitPly → XaPlaying`
 
 ---
 
+## 📼 FMV/MDEC System (90% ✅)
+
+### Functions
+
+| Address | Name | Confiança | Description |
+|---------|------|:---------:|-------------|
+| `0x8017e574` | `MDEC_StartDecode(cmd, size)` | ✅ | Calls MDEC_WaitReady, configures DMA0+DMA1, sends MDEC command. 5 callers (different decode modes). |
+| `0x8017e690` | `MDEC_WaitReady()` | ✅ | Polls MDEC status bit 29 (0x20000000) with timeout 0x100000. Returns 0=ready, 0xFFFFFFFF=timeout. On timeout: Debug_PrintError("MDEC_in_sync"). |
+| `0x8017e7d0` | `Debug_PrintError(string)` | ✅ | Same pattern as "VSync: timeout" printer. Used for MDEC and other hardware timeout errors. |
+
+### Hardware Register Map (MDEC + DMA)
+
+| Global (RAM) | Hardware Addr | Description |
+|---|---|---|
+| `DAT_8019b790` | `0x1F801820` | MDEC command/data register |
+| `DAT_8019b794` | `0x1F801824` | MDEC status (bit 29 = busy) |
+| `DAT_8019b798` | `0x1F8010F0` | DMA DPCR (channel priority/enable) |
+| `DAT_8019b760` | `0x1F801080` | DMA0 MADR (MDEC-in source addr) |
+| `DAT_8019b764` | `0x1F801084` | DMA0 BCR (block count/size) |
+| `DAT_8019b768` | `0x1F801088` | DMA0 CHCR (start DMA to MDEC) |
+| `DAT_8019b76c` | `0x1F801090` | DMA1 MADR (MDEC-out destination) |
+
+### Debug Strings
+
+| Address | String | Role |
+|---------|--------|------|
+| `0x8011bdb4` | `"MDEC_in_sync"` | MDEC timeout error message |
+
+### FMV Pipeline (confirmed)
+
+```
+1. XA streaming:   XaSeek → XaWaitPly → XaPlaying (CD drive states)
+2. MDEC_WaitReady: poll MDEC status bit 29
+3. DMA0:           RAM → MDEC (compressed frame data)
+4. MDEC command:   initiate JPEG-like decode
+5. DMA1:           MDEC → RAM (decoded RGB frame to framebuffer)
+6. Frame_Flip:     framebuffer added to OT → GPU displays
+```
+
+### Port Replacement (PC)
+
+| PS1 | PC Replacement |
+|-----|----------------|
+| `MDEC_WaitReady` | no-op (software decoder handles sync) |
+| `MDEC_StartDecode` | libavcodec / custom MPEG1 decoder |
+| DMA0/DMA1 transfers | `memcpy` to/from decoder buffers |
+| XA streaming | file I/O + XA-ADPCM decoder |
+
+---
+
 ## 💾 Asset Loading
 
 ### Confirmed Functions
@@ -864,6 +934,24 @@ Ferramenta: `tools/cdb_extractor.py` (1050 sub-files extraídos de MODEL.CDB →
 | `0x80190e5c` | `g_FileTableB` | `pair[7]` `{dest,name}` | ✅ |
 | `0x8011c0dc` | `g_CDConfig` | CD driver config block | ✅ |
 | `0x8011c0e4` | `g_CDDefaultPath` | `char*` | ✅ |
+| `0x801ac9b8` | `g_DispEnv_0` | PsyQ DISPENV buffer 0 | ✅ |
+| `0x801aca14` | `g_DrawEnv_0` | PsyQ DRAWENV buffer 0 | ✅ |
+| `0x801aca30` | `g_DispEnv_1` | PsyQ DISPENV buffer 1 | ✅ |
+| `0x801aca8c` | `g_DrawEnv_1` | PsyQ DRAWENV buffer 1 | ✅ |
+| `0x801acab8` | `g_DrawEnvActive` | active DrawEnv pointer | ✅ |
+| `0x80193e20` | `g_DispX0` | display buffer 0 X | ✅ |
+| `0x80193e24` | `g_DispX1` | display buffer 1 X | ✅ |
+| `0x80193e28` | `g_DispY0` | display buffer 0 Y | ✅ |
+| `0x80193e2c` | `g_DispY1` | display buffer 1 Y | ✅ |
+| `0x80193e38` | `g_DrawHeight` | draw area height | ✅ |
+| `0x80193e3c` | `g_DrawWidth` | draw area width | ✅ |
+| `0x8019b760` | `DAT_8019b760` | DMA0 MADR → `0x1F801080` | ✅ |
+| `0x8019b764` | `DAT_8019b764` | DMA0 BCR → `0x1F801084` | ✅ |
+| `0x8019b768` | `DAT_8019b768` | DMA0 CHCR → `0x1F801088` | ✅ |
+| `0x8019b76c` | `DAT_8019b76c` | DMA1 MADR → `0x1F801090` | ✅ |
+| `0x8019b790` | `DAT_8019b790` | MDEC_CMD_DATA → `0x1F801820` | ✅ |
+| `0x8019b794` | `DAT_8019b794` | MDEC_STATUS → `0x1F801824` | ✅ |
+| `0x8019b798` | `DAT_8019b798` | DMA_DPCR → `0x1F8010F0` | ✅ |
 
 ---
 
@@ -1006,7 +1094,7 @@ Formatos de Textura:
 - [x] Renderer (completo — DrawOTag, Frame_Flip, 6 OT buffers, GPU registers all confirmed)
 - [x] Sistema de Câmera (completo — `Camera_LoadToGTE`, `Camera_Manager`, `Camera_RecordFrame`)
 - [x] Sistema de Áudio (SOUND.CDB: 95 pQES SEQ files confirmados; SPU bank candidates identificados)
-- [ ] Sistema de FMV/MDEC
+- [x] Sistema de FMV/MDEC (90% — MDEC registers, DMA config, status polling all mapped)
 - [ ] Overlays de mapa/área
 
 ### Fase 2 — Port Base

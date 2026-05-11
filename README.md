@@ -79,12 +79,16 @@ WORK IN PROGRESS — Active research phase
 - DrawSync (0x8017b114): blocking/non-blocking GPU wait, confirmed complete
 - GPU hardware registers: 0x1F8010A8 (display), 0x1F801814 (DMA)
 - BattleTransition_Render (0x8014d2cc): combat screen renderer
+- DispEnv/DrawEnv double-buffer (Display_InitBuffers): g_DispEnv_0/1, g_DrawEnv_0/1 mapped
+- PsyQ_SetDispEnv (0x8018d4d8) and PsyQ_SetDrawEnv (0x8018d598) confirmed
 - Port path: DrawOTag → iterate OT → OpenGL/Vulkan draw calls
 
-### ❌ FMV/MDEC System (0%)
-- XA.MXA: 85MB streaming file identified
-- MOV/ and MOV_D/ folders found on CD
-- Implementation not yet started
+### ✅ FMV/MDEC System (90%)
+- MDEC_StartDecode (0x8017e574): DMA0+DMA1+MDEC command pipeline
+- MDEC_WaitReady (0x8017e690): status polling with timeout
+- Full hardware register map: 7 DMA/MDEC registers documented
+- FMV pipeline: XA streaming → MDEC decode → framebuffer → GPU
+- Port: replace with libavcodec MPEG1 + SDL_Mixer XA decode
 
 ### ❌ Map/Area Overlays (0%)
 - MODULE.BIN loads to 0x801AD140
