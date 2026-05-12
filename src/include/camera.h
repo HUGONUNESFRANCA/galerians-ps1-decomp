@@ -19,6 +19,7 @@
  *   0x80187320  ✅ Camera_LoadToGTE
  *   0x8013b584  ✅ Camera_Manager
  *   0x80187350  ✅ Camera_RecordFrame
+ *   0x8018b320  ✅ Room_SetupCameraSlots — init 4 camera angles per room
  */
 
 /* ── Constantes ────────────────────────────────────────────── */
@@ -27,6 +28,18 @@
 #define GTE_SCRATCHPAD_ADDR          0x1F800168  /* destino de Camera_LoadToGTE (COP2 source) */
 #define CAMERA_HISTORY_STRIDE        0x20   /* bytes por entrada no ring buffer de histórico */
 #define CAMERA_HISTORY_DATA_OFFSET   0x04   /* offset até a primeira entrada no buffer */
+
+/* Room_SetupCameraSlots: número de ângulos de câmera por sala */
+#define ROOM_CAMERA_ANGLES           4
+/* Cor ambiente default escrita em cada slot ao inicializar uma sala */
+#define ROOM_AMBIENT_R               0x80
+#define ROOM_AMBIENT_G               0x80
+#define ROOM_AMBIENT_B               0x80
+/* Offsets do "extra data" dentro do camera_ptr — angle-dependent */
+#define ROOM_EXTRA_OFFSET_ANGLE0     0x54
+#define ROOM_EXTRA_OFFSET_ANGLE1     0x44
+#define ROOM_EXTRA_OFFSET_ANGLE2     0x6C
+#define ROOM_EXTRA_OFFSET_ANGLE3     0x54
 
 /* ── CameraEntry ───────────────────────────────────────────────────
  * Entrada da tabela de câmeras e struct da câmera ativa.
@@ -84,6 +97,41 @@ void Camera_Manager(void);
  *   g_CameraHistoryPtr + CAMERA_HISTORY_DATA_OFFSET + (frame_index * CAMERA_HISTORY_STRIDE)
  * e então incrementa o índice (int16 em g_CameraHistoryPtr + 2). */
 void Camera_RecordFrame(void);
+
+/* ── RoomDescriptor ────────────────────────────────────────────────
+ * Descritor de sala consumido por Room_SetupCameraSlots (0x8018b320).
+ * O parâmetro é tratado como `int*` no código original — uma struct de
+ * ponteiros e shorts cujos índices [0..0xd] são preenchidos pela função.
+ *
+ *   [0..3]  camera_data_ptr[ROOM_CAMERA_ANGLES]   — ptr para frame data por ângulo
+ *   [4..7]  geometry_ptr[ROOM_CAMERA_ANGLES]      — ptr para mesh por ângulo
+ *   [9]     frame_count (ushort) — angle 0 = *(ushort*)*camera_ptr
+ *   [0xa]   frame_data_ptr  = camera_ptr + 4
+ *   [0xb]   extra_data_ptr  = camera_ptr + ROOM_EXTRA_OFFSET_ANGLE<n>
+ *   [0xc]   geometry_data_ptr = geom_ptr + 4
+ *   [0xd]   current_frame angle 0 = 0 (init)
+ *
+ * Cor ambiente é gravada em runtime nos offsets +0x30/38/50/68 (R), +1 (G),
+ * +2 (B), +3 (flag de *(geometry_data + 0xC) byte [3]). Ver MemoryMap.md.
+ * ─────────────────────────────────────────────────────────────── */
+typedef struct {
+    int   *camera_data_ptr[ROOM_CAMERA_ANGLES];   /* [0..3] */
+    int   *geometry_ptr   [ROOM_CAMERA_ANGLES];   /* [4..7] */
+    int    _unused_8;                              /* [8]    desconhecido */
+    int    frame_count_a0;                         /* [9]    ushort em LSB */
+    int   *frame_data_ptr;                         /* [0xa]  = camera_ptr + 4 */
+    int   *extra_data_ptr;                         /* [0xb]  = camera_ptr + ROOM_EXTRA_OFFSET_ANGLE<n> */
+    int   *geometry_data_ptr;                      /* [0xc]  = geom_ptr + 4 */
+    int    current_frame_a0;                       /* [0xd]  zerado na init */
+} RoomDescriptor;
+
+/* 0x8018b320 — ✅ Room_SetupCameraSlots
+ * Inicializa 4 ângulos de câmera de uma sala a partir do RoomDescriptor.
+ * Liga frame_data + geometry + cor ambiente RGB(0x80,0x80,0x80) e o flag
+ * derivado de *(geometry_data + 0xC)[3]. Chamada em toda troca de sala/área.
+ * O sub-bloco em 0x8018B3EC é parte interna desta função (não é função
+ * separada — escreve nos slots de câmera). */
+void Room_SetupCameraSlots(RoomDescriptor *room);
 
 /* ── Port Notes (Fase 2 — PC) ──────────────────────────────────────
  *

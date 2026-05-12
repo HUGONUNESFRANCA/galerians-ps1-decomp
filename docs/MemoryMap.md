@@ -401,6 +401,31 @@ typedef struct {
 | `0x80187320` | `Camera_LoadToGTE` | ✅ | Copia 8 × uint32 de `g_CameraBuffer` para scratchpad GTE (`0x1F800168`) |
 | `0x8013b584` | `Camera_Manager` | ✅ | Reseta 4 slots (stride `0xC60`) — zera `+0xC3E` e `func_ptr` |
 | `0x80187350` | `Camera_RecordFrame` | ✅ | Copia 8 × uint32 de `g_CameraBuffer` → `g_CameraHistoryPtr + 4 + (idx × 0x20)`; incrementa `idx` |
+| `0x8018b320` | `Room_SetupCameraSlots(room_descriptor*)` | ✅ | Initializes 4 camera angles from room descriptor: frame data, geometry ptrs, ambient RGB (0x80,0x80,0x80), flag byte from geom+0xC. Called on room/area transition. |
+| `0x8018B3EC` | *(inside Room_SetupCameraSlots)* | ✅ | Camera slot write sub-block — confirmed part of Room_SetupCameraSlots, not a separate function |
+| `0x801789a0` | `ResetGraph(mode)` | ✅ | PsyQ ResetGraph — `param_1 & 7` selects mode (0,3=full reset; 5=partial). Debug string "ResetGraph:jtb=%08x,env=%08x\n" at 0x8011b990. Called during room transition to reallocate rendering slots. |
+| `0x8017d620` | `Debug_Printf(fmt, ...)` | ✅ | Confirmed by "ResetGraph:jtb=%08x,env=%08x\n" debug string |
+
+#### Room Descriptor Layout (`int* param_1`)
+
+| Index | Field | Notes |
+|-------|-------|-------|
+| `[0]`   | ptr → camera data angle 0 | |
+| `[1]`   | ptr → camera data angle 1 | |
+| `[2]`   | ptr → camera data angle 2 | |
+| `[3]`   | ptr → camera data angle 3 | |
+| `[4]`   | ptr → geometry data angle 0 | |
+| `[5]`   | ptr → geometry data angle 1 | |
+| `[6]`   | ptr → geometry data angle 2 | |
+| `[7]`   | ptr → geometry data angle 3 | |
+| `[9]`   | `frame_count` angle 0 = `*(ushort*)*camera_ptr` | |
+| `[0xa]` | `frame_data_ptr` = camera_ptr + 4 | |
+| `[0xb]` | `extra_data_ptr` = camera_ptr + angle-dependent offset | Angle 0: +0x54 / Angle 1: +0x44 / Angle 2: +0x6C / Angle 3: +0x54 |
+| `[0xc]` | `geometry_ptr` = geom_ptr + 4 | |
+| `[0xd]` | `current_frame` angle 0 = 0 on init | |
+
+Ambient color set per angle at runtime: RGB = `(0x80, 0x80, 0x80)`.
+Flag byte sourced from: `*(geometry_data + 0xC)` → byte at `[3]`.
 
 ---
 
@@ -1042,7 +1067,15 @@ GPU Hardware Registers (confirmed):
   bit 24 of GPU status = GPU busy (drawing)
   bit 26 of GPU status = DMA transfer active
 
-Vtable do Renderer (base 0x8019b4c8):
+Vtable do Renderer (base 0x8019b488 extended):
+  0x8019b488  ptr → PsyQ version string
+  0x8019b490  RenderQueue_Enqueue  (Ghidra auto-named)
+  0x8019b494  FUN_8017a2b4
+  0x8019b498  FUN_8017a9a0
+  0x8019b4c4  DrawSync (FUN_8017b114)
+  0x8019b4c8  RendererVtable secondary ref (g_RendererVtable)
+
+  Relative to g_RendererVtable (0x8019b4c8):
   -0x0C  ClearImage / ResetGraph  (0x8017afc4)
   -0x08  SetDispMask              (0x8017a1bc)
   -0x04  DrawSync direto          (0x8017b114)
@@ -1068,7 +1101,7 @@ Formatos de Textura:
 
 ---
 
-## 🔄 Map/Area Overlays (In Progress — ~30%)
+## 🔄 Map/Area Overlay System (COMPLETE — ~80% ✅)
 
 ### MODULE.BIN Behavior (CONFIRMED ✅)
 
@@ -1076,35 +1109,44 @@ Formatos de Textura:
 |----------|-------|
 | Load address | `0x801AD140` |
 | Load time | Once at startup via `AssetLoader_Init` (`0x8011ce48`) |
-| Size | 2.4 MB monolithic code module |
-| Contents | ALL area-specific code (does NOT reload on area change) |
+| Size | 2.4 MB monolithic code module — contains code for ALL areas |
+| Reload behavior | NEVER reloaded — stays resident; area switching is via state machine slots, not overlay swap |
 | Header | `{0x01, "\T4\MODULE.BIN;1"}` — static, never changes |
+| Sound Manager hook | Reads area event data from `MODULE.BIN + 0x80` (`0x801AD1C0`) |
 
-`AssetLoader_Init` (`0x8011ce48`) loads **all** CDB files at startup. There is no per-area reloading:
-- `MODULE.BIN` is loaded once to `0x801AD140` and stays resident in RAM permanently
-- `MODEL.CDB`, `SOUND.CDB`, `DISPLAY.CDB`, `MENU.CDB`, `ITEMTIM.CDB` are all loaded once at boot
+`AssetLoader_Init` (`0x8011ce48`) loads **all** CDB files at startup. There is no per-area reloading — every CDB and `MODULE.BIN` is preloaded once.
 
-### Area Switching Mechanism (HYPOTHESIS 🟡 — to confirm)
+### Room Data — stored in MODEL.CDB (1050 assets)
 
-The current hypothesis based on the scheduler and STATE machine architecture:
+Per-room contents:
+- **Camera data:** frame animations per camera angle (up to 4 angles per room)
+- **Geometry:** room mesh per camera angle
+- **Ambient color:** set at runtime to `RGB(0x80, 0x80, 0x80)` per angle
 
-1. **`StateSlot_Allocate` (`0x8016019c`)** creates a new slot for each area transition
-2. The slot's **function pointer** points into `MODULE.BIN` at an area-specific offset within `0x801AD140+`
-3. Area-specific assets (backgrounds) are likely loaded via **BGTIM streaming** from one of 4 BGTIM CDB files:
-   - `BGTIM_A.CDB` — area group A (e.g. hospital)
-   - `BGTIM_B.CDB` — area group B (e.g. rooftop)
-   - `BGTIM_C.CDB` — area group C (e.g. lab)
-   - `BGTIM_D.CDB` — area group D
-4. 4 BGTIM files ↔ 4 area groups suggests a **jump table** inside MODULE.BIN indexed by area group
-
-### To Investigate
+### Room Transition Mechanism (CONFIRMED ✅)
 
 ```
-- Breakpoint on StateSlot_Allocate (0x8016019c) during room transitions
-- Find area jump table inside MODULE.BIN at 0x801AD140+
-- Determine how BGTIM_A/B/C/D are selected per area group
-- Confirm which BGTIM is streamed vs preloaded
+1. Area transition triggers Room_SetupCameraSlots (0x8018b320)
+2. Function initializes 4 camera angles from room descriptor
+3. Sets ambient RGB color (128,128,128) for each new camera angle
+4. Links geometry data to each camera angle
+5. PsyQ ResetGraph (0x801789a0) reallocates rendering slots
+6. State machine activates new room's rendering slot (BGTIM group)
 ```
+
+### Camera Slot Fields (within room descriptor — runtime offsets)
+
+| Offset (angle 0/1/2/3) | Field |
+|---|---|
+| `+0x30 / 0x38 / 0x50 / 0x68` | ambient color R = 0x80 |
+| `+0x31 / 0x39 / 0x51 / 0x69` | ambient color G = 0x80 |
+| `+0x32 / 0x3a / 0x52 / 0x6a` | ambient color B = 0x80 |
+| `+0x33 / 0x3b / 0x53 / 0x6b` | special flag (from `*(geom + 0xC) + 3`) |
+| `+0x34 / 0x3c / 0x54 / 0x6c` | additional camera parameters |
+
+### Remaining Gap (20%)
+
+Final room index table linking area IDs → room descriptor pointers still to be located. Likely in `MODULE.BIN` or near `0x801AD1C0` (Sound Manager area event base).
 
 ---
 
@@ -1135,7 +1177,7 @@ The current hypothesis based on the scheduler and STATE machine architecture:
 - [x] Sistema de Câmera (completo — `Camera_LoadToGTE`, `Camera_Manager`, `Camera_RecordFrame`)
 - [x] Sistema de Áudio (SOUND.CDB: 95 pQES SEQ files confirmados; SPU bank candidates identificados)
 - [x] Sistema de FMV/MDEC (90% — MDEC registers, DMA config, status polling all mapped)
-- [~] Overlays de mapa/área (~30% — MODULE.BIN behavior confirmed; area switching mechanism hypothesis pending validation)
+- [x] Overlays de mapa/área (~80% — `Room_SetupCameraSlots` (0x8018b320), room descriptor format, 4-angle camera system, ambient RGB, geometry/frame ptrs, PsyQ `ResetGraph` (0x801789a0) all confirmed; final area-ID → room descriptor table still pending)
 
 ### Fase 2 — Port Base
 - [ ] Substituir VSync por timer Windows (QueryPerformanceCounter)

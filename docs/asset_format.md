@@ -36,7 +36,56 @@ Function: AssetLoader_Init (0x8011ce48)
 - Sub-asset types observed in `MODEL.CDB`: TIM textures + TMD models (+ a few HMD).
 
 ## MODULE.BIN Format
-- Code overlay system loaded to fixed address 0x801AD140. Each area/room has its own code module.
+- **Monolithic** 2.4 MB code module loaded once to fixed address `0x801AD140`.
+- Contains code for ALL areas — never reloaded per-area.
+- Area switching happens via state machine slots and BGTIM groups, NOT overlay swap.
+- Sound Manager reads per-area event data from `MODULE.BIN + 0x80` (`0x801AD1C0`).
+
+## Room / Area Data (in MODEL.CDB)
+
+Per-room data is stored inside `MODEL.CDB` (1050 sub-assets). Each room
+has up to **4 camera angles** with independent camera data + geometry.
+The runtime parser is `Room_SetupCameraSlots` @ `0x8018b320`.
+
+### Room Descriptor (passed as `int* param_1`)
+
+| Index | Field | Notes |
+|-------|-------|-------|
+| `[0..3]`   | `camera_data_ptr[0..3]` | ptr to camera frame data per angle |
+| `[4..7]`   | `geometry_ptr[0..3]`    | ptr to geometry per angle |
+| `[9]`      | `frame_count` angle 0   | `*(ushort*)*camera_ptr` |
+| `[0xa]`    | `frame_data_ptr`        | = `camera_ptr + 4` |
+| `[0xb]`    | `extra_data_ptr`        | angle-dependent offset (see table below) |
+| `[0xc]`    | `geometry_data_ptr`     | = `geom_ptr + 4` |
+| `[0xd]`    | `current_frame` angle 0 | initialized to 0 |
+
+### Extra Data Offsets per Camera Angle
+
+| Angle | Offset from `camera_ptr` |
+|------:|--------------------------|
+| 0     | `+0x54` |
+| 1     | `+0x44` |
+| 2     | `+0x6C` |
+| 3     | `+0x54` |
+
+### Per-Angle Runtime Fields (set by Room_SetupCameraSlots)
+
+| Angle 0 / 1 / 2 / 3 | Field |
+|--------------------|-------|
+| `+0x30 / 0x38 / 0x50 / 0x68` | ambient color R = `0x80` |
+| `+0x31 / 0x39 / 0x51 / 0x69` | ambient color G = `0x80` |
+| `+0x32 / 0x3a / 0x52 / 0x6a` | ambient color B = `0x80` |
+| `+0x33 / 0x3b / 0x53 / 0x6b` | special flag = `*(geometry_data + 0xC)` → byte `[3]` |
+| `+0x34 / 0x3c / 0x54 / 0x6c` | additional camera parameters |
+
+### Room Transition Pipeline
+
+```
+1. Area transition  → Room_SetupCameraSlots (0x8018b320)
+2. Init 4 angles    → frame data, geometry, ambient RGB(0x80,0x80,0x80)
+3. ResetGraph       → PsyQ (0x801789a0) reallocates rendering slots
+4. State machine    → activates new room's rendering slot (BGTIM group)
+```
 
 ## MODULE.BIN Header Format
 

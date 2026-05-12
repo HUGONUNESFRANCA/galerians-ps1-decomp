@@ -90,13 +90,13 @@ WORK IN PROGRESS — Active research phase
 - FMV pipeline: XA streaming → MDEC decode → framebuffer → GPU
 - Port: replace with libavcodec MPEG1 + SDL_Mixer XA decode
 
-### 🔄 Map/Area Overlays (~30%)
-- MODULE.BIN loaded ONCE at startup to 0x801AD140 (2.4MB, stays resident — never reloads)
-- Header: {0x01, "\T4\MODULE.BIN;1"} — static
-- AssetLoader_Init (0x8011ce48) loads ALL files at startup; no per-area reloading confirmed
-- Area switching hypothesis: StateSlot_Allocate (0x8016019c) creates slot per area; func ptr points into MODULE.BIN at area offset
-- 4 BGTIM files (BGTIM_A/B/C/D.CDB) suggest 4 area groups (hospital, rooftop, lab, etc.)
-- Area jump table inside MODULE.BIN at 0x801AD140+ to be located
+### ✅ Map/Area Overlays (80%)
+- MODULE.BIN: monolithic code at 0x801AD140, never reloaded per-area
+- Room data in MODEL.CDB: camera angles, geometry, ambient color
+- Room_SetupCameraSlots (0x8018b320): initializes 4 camera angles per room
+- Each room: up to 4 camera angles with frame animation + geometry + RGB ambient
+- PsyQ ResetGraph (0x801789a0) manages rendering slot reallocation
+- Missing: final room index table linking area IDs to descriptor pointers
 
 ## Estrutura do Repositório
 galerians-ps1-decomp/
