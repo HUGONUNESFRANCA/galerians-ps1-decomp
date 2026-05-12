@@ -1,0 +1,14 @@
+# Pastas de Build do CMake
+build/
+out/
+bin/
+
+# Gerenciador de Pacotes (se estiver dentro da pasta do projeto)
+vcpkg/
+vcpkg_installed/
+
+# Arquivos temporários do Visual Studio / VSCode
+.vs/
+.vscode/
+*.user
+*.suo
