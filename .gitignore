@@ -19,3 +19,15 @@
 # 4. Lixo de Sistema Operacional
 .DS_Store
 Thumbs.db
+
+# 5. Python cache
+__pycache__/
+*.pyc
+
+# 6. vcpkg build system (grande demais)
+vcpkg/
+
+# 7. Artefatos extraídos e binários grandes
+tools/extracted/
+port/assets/model/
+port/assets/model_valid/
