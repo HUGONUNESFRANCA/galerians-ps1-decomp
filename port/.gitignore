@@ -12,3 +12,6 @@ vcpkg_installed/
 .vscode/
 *.user
 *.suo
+
+# Assets extraídos do jogo (NÃO COMMITAR POR DIREITOS AUTORAIS)
+assets/

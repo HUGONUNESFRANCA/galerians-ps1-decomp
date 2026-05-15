@@ -27,7 +27,7 @@ __pycache__/
 # 6. vcpkg build system (grande demais)
 vcpkg/
 
-# 7. Artefatos extraídos e binários grandes
+# 7. Artefatos extraídos e binários grandes (NÃO COMMITAR - direitos autorais)
 tools/extracted/
-port/assets/model/
-port/assets/model_valid/
+port/assets/
+extracted_model/
